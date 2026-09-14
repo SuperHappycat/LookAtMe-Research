@@ -1,0 +1,394 @@
+/**
+ * styles/shared.module.css
+ * ==========================
+ * Shared design system for every page, matching the desktop app's
+ * look (config.py's UIConfig: primary #1565C0, accent #42A5F5,
+ * background #F5F7FA, Segoe UI, white rounded cards) so the web port
+ * reads as the same product. Imported by every page/component that
+ * needs it -- CSS Modules generate unique scoped class names per
+ * importer, so sharing one file across many components is safe and
+ * normal (not a global-namespace collision risk).
+ */
+
+.page {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 32px 20px 60px;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: #1a1a1a;
+}
+
+.pageNarrow {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 40px 20px 60px;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: #1a1a1a;
+}
+
+.pageFull {
+  min-height: 100dvh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 20px;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: #1a1a1a;
+  box-sizing: border-box;
+}
+
+.logo {
+  display: block;
+  margin: 0 auto 8px;
+  max-width: 280px;
+  height: auto;
+}
+
+.logoBig {
+  display: block;
+  margin: 0 auto 12px;
+  width: min(420px, 70vw);
+  height: auto;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.title {
+  font-size: 26px;
+  font-weight: 700;
+  color: #1565c0;
+  margin: 0 0 6px;
+}
+
+.titleCentered {
+  font-size: 26px;
+  font-weight: 700;
+  color: #1565c0;
+  margin: 0 0 12px;
+  text-align: center;
+}
+
+.subtitle {
+  color: #607d8b;
+  font-size: 14px;
+  margin: 0 0 24px;
+}
+
+.subtitleCentered {
+  color: #607d8b;
+  font-size: 14px;
+  margin: 0 0 24px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #37474f;
+}
+
+.field input,
+.field select {
+  padding: 10px 12px;
+  border: 1px solid #cfd8dc;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  background: white;
+}
+
+.inlineSelectRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inlineSelectRow select {
+  padding: 10px 12px;
+  border: 1px solid #cfd8dc;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  background: white;
+}
+
+.primaryButton {
+  background: #1565c0;
+  color: white;
+  border: none;
+  padding: 12px 22px;
+  border-radius: 22px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primaryButton:disabled {
+  background: #90a4ae;
+  cursor: not-allowed;
+}
+
+.secondaryButton {
+  background: #90a4ae;
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dangerButton {
+  background: #c62828;
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.navRow {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.navButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 260px;
+  height: 56px;
+  border-radius: 28px;
+  font-size: 17px;
+  font-weight: 700;
+  color: white;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.videoRow {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+  position: relative;
+}
+
+/* The stimulus videos are always mounted (see Test1/2/3Client) so their
+   refs exist before the "Start Test" click -- that's what lets
+   runner.start() call .play() synchronously within the click's user
+   gesture, which browsers require for autoplay *with sound*.
+   Pre-"running", this class replaces .videoRow instead of `hidden`/
+   `display:none`: Chromium silently never actually starts decoding a
+   `display:none` video even though play() still resolves, so the video
+   would stay stuck paused at 0:00 with no error. Shrinking it to 1x1 and
+   moving it off-screen (but keeping it genuinely rendered) avoids that,
+   so it's already playing (audio included) by the moment it becomes
+   visible. */
+.videoRowOffscreen {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  left: -9999px;
+}
+
+.videoPanel {
+  flex: 1 1 480px;
+  max-width: 760px;
+  background: #212121;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.videoPanel video {
+  /* All stimulus clips are natively 16:9 -- matching the frame to that
+     ratio (instead of guessing 4:3) means object-fit: contain never has
+     to letterbox, so the dark frame hugs the video with no black bars. */
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  max-height: 70vh;
+  object-fit: contain;
+  background: #212121;
+  display: block;
+}
+
+.videoPanelSingle {
+  flex: 1 1 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  background: #212121;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.videoPanelSingle video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  max-height: 78vh;
+  object-fit: contain;
+  background: #212121;
+  display: block;
+}
+
+.videoLabel {
+  text-align: center;
+  font-size: 12px;
+  color: #607d8b;
+  margin-bottom: 6px;
+}
+
+.timer {
+  text-align: center;
+  font-weight: 700;
+  color: #1565c0;
+  margin: 16px 0 4px;
+}
+
+.cornerPreviewWrap {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  z-index: 10;
+}
+
+.statusText {
+  background: rgba(17, 17, 17, 0.85);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.previewCanvas {
+  width: 220px;
+  height: 165px;
+  border-radius: 8px;
+  background: #111;
+  border: 2px solid #1565c0;
+}
+
+.resultsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 14px;
+  margin: 20px 0;
+}
+
+.statTile {
+  background: #f5f7fa;
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
+}
+
+.statValue {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1565c0;
+}
+
+.statLabel {
+  font-size: 12px;
+  color: #607d8b;
+  margin-top: 2px;
+}
+
+.saveRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.errorText {
+  color: #c62828;
+  font-size: 13px;
+}
+
+.successText {
+  color: #2e7d32;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.hiddenVideo {
+  display: none;
+}
+
+.overallCard {
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+  margin: 20px 0;
+}
+
+.overallScore {
+  font-size: 30px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.riskBadge {
+  display: inline-block;
+  padding: 6px 18px;
+  border-radius: 16px;
+  font-weight: 700;
+  font-size: 14px;
+  color: white;
+}
+
+.sessionRow {
+  background: #fafafa;
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.sessionRow strong {
+  font-size: 13px;
+}
