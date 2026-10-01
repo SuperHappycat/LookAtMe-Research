@@ -21,16 +21,16 @@ export default function HomeClient() {
     <div className={styles.pageFull}>
       <div className={styles.header}>
         <Image src="/logo.png" alt="LookAtMe" width={420} height={149} className={styles.logoBig} priority />
-        <p className={styles.subtitleCentered} style={{ fontSize: 16 }}>
+        <p className={styles.subtitleCentered} style={{ fontSize: 18 }}>
           Eye-Tracking Screening • Preliminary screening only, not a diagnostic tool
         </p>
       </div>
 
       <div className={styles.navRow}>
-        <Link href="/intake" className={styles.navButton} style={{ background: "#1565c0" }}>
+        <Link href="/intake" className={styles.navButton}>
           Start Screening
         </Link>
-        <Link href="/results" className={styles.navButton} style={{ background: "#546e7a" }}>
+        <Link href="/results" className={`${styles.navButton} ${styles.navButtonSecondary}`}>
           Previous Results
         </Link>
       </div>
