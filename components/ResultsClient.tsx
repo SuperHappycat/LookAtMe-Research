@@ -14,7 +14,7 @@ import Link from "next/link";
 import styles from "@/styles/shared.module.css";
 import type { ResultRow } from "@/app/api/list-results/route";
 
-const RISK_COLORS: Record<string, string> = { Low: "#2e7d32", Moderate: "#f9a825", High: "#c62828" };
+const RISK_COLORS: Record<string, string> = { Low: "#4f7a4b", Moderate: "#b97a1c", High: "#a63a2c" };
 
 type State = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; rows: ResultRow[] };
 
@@ -67,7 +67,7 @@ export default function ResultsClient() {
             {row.riskLevel && (
               <span
                 className={styles.riskBadge}
-                style={{ background: RISK_COLORS[row.riskLevel] ?? "#607d8b" }}
+                style={{ background: RISK_COLORS[row.riskLevel] ?? "#86705f" }}
               >
                 {row.riskLevel}
               </span>
@@ -76,7 +76,7 @@ export default function ResultsClient() {
         ))}
 
       <div className={styles.navRow}>
-        <Link href="/" className={styles.navButton} style={{ background: "#90a4ae" }}>
+        <Link href="/" className={`${styles.navButton} ${styles.navButtonSecondary}`}>
           Back to Home
         </Link>
       </div>

@@ -52,6 +52,8 @@ hooks/
                                  behind all 3 tests (the browser
                                  equivalent of gui/video_test_base.py)
 lib/
+  gazeWorkerClient.ts            Tab-wide shared gaze worker (OpenCV.js loads once,
+                                 preloaded from the intake page)
   sessionState.ts                sessionStorage-backed patient/results state
   scoring.ts                     Port of scoring.py
   provinces.ts                   Thai provinces + month names

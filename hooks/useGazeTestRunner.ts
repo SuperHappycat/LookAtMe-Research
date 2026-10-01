@@ -15,19 +15,21 @@
  * into whatever that test's own region log needs.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { GazeDirection } from "@/lib/vision/types";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  getGazeWorker,
+  getGazeWorkerStatus,
+  subscribeGazeWorker,
+  type WorkerSample,
+  type WorkerStatus,
+} from "@/lib/gazeWorkerClient";
 
-export interface WorkerSample {
-  direction: GazeDirection;
-  eyesDetected: boolean;
-  confidence: number;
-}
+export type { WorkerSample, WorkerStatus };
 
-type WorkerMessage =
-  | { type: "ready" }
-  | { type: "error"; message: string }
-  | { type: "result"; sample: WorkerSample };
+const getStatusSnapshot = () => getGazeWorkerStatus().status;
+const getErrorSnapshot = () => getGazeWorkerStatus().error;
+const getServerStatus = (): WorkerStatus => "loading";
+const getServerError = () => null;
 
 export const DETECTION_INTERVAL_MS = 100;
 
@@ -39,8 +41,6 @@ export const DETECTION_INTERVAL_MS = 100;
 // resolution are intentionally decoupled.
 export const CAPTURE_W = 640;
 export const CAPTURE_H = 480;
-
-export type WorkerStatus = "loading" | "ready" | "error";
 
 export interface UseGazeTestRunnerOptions {
   testDurationMs: number;
@@ -66,8 +66,13 @@ export interface UseGazeTestRunnerOptions {
 export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
   const { testDurationMs, videoRefs, webcamVideoRef, previewCanvasRef, onSample, onStop } = options;
 
-  const [workerStatus, setWorkerStatus] = useState<WorkerStatus>("loading");
-  const [loadError, setLoadError] = useState<string | null>(null);
+  // Init status comes from the tab-wide shared worker; a frame-processing
+  // error during this page's run is tracked locally on top of it.
+  const sharedStatus = useSyncExternalStore(subscribeGazeWorker, getStatusSnapshot, getServerStatus);
+  const sharedError = useSyncExternalStore(subscribeGazeWorker, getErrorSnapshot, getServerError);
+  const [frameError, setFrameError] = useState<string | null>(null);
+  const workerStatus: WorkerStatus = frameError ? "error" : sharedStatus;
+  const loadError = frameError ?? sharedError;
   const [running, setRunning] = useState(false);
   const [remainingSec, setRemainingSec] = useState(testDurationMs / 1000);
   const [liveStatus, setLiveStatus] = useState<WorkerSample | null>(null);
@@ -75,6 +80,9 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
   const [cameraError, setCameraError] = useState<string | null>(null);
 
   const workerRef = useRef<Worker | null>(null);
+  // At most one frame is in flight to the worker at a time, so we never
+  // pay for a getImageData() readback that the worker would just drop.
+  const frameInFlightRef = useRef(false);
   const streamRef = useRef<MediaStream | null>(null);
 
   const runningRef = useRef(false);
@@ -107,41 +115,43 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
     stopTimeoutRef.current = null;
   }, []);
 
-  // ---- spin up the vision worker once, in the background ----
-  // (See public/gaze-worker.js -- a classic Worker, not a module worker,
-  // specifically so opencv.js's importScripts()-based UMD loader works
-  // unmodified. All OpenCV work happens there, off the main thread --
-  // loading opencv.js's ~10MB WASM binary is heavy enough to freeze the
-  // page if it ran here directly.)
+  // ---- attach to the shared vision worker ----
+  // (See lib/gazeWorkerClient.ts and public/gaze-worker.js -- a classic
+  // Worker, not a module worker, specifically so opencv.js's
+  // importScripts()-based UMD loader works unmodified. It's shared across
+  // test pages so opencv.js only loads once per tab.)
   useEffect(() => {
-    const worker = new Worker("/gaze-worker.js");
-    workerRef.current = worker;
+    workerRef.current = getGazeWorker();
+    frameInFlightRef.current = false;
 
-    worker.onmessage = (e: MessageEvent<WorkerMessage>) => {
-      const msg = e.data;
-      if (msg.type === "ready") {
-        setWorkerStatus("ready");
+    const unsubscribe = subscribeGazeWorker((msg) => {
+      if (msg.type === "skipped") {
+        frameInFlightRef.current = false;
       } else if (msg.type === "error") {
+        frameInFlightRef.current = false;
         console.error("gaze-worker error:", msg.message);
-        setLoadError(msg.message);
-        setWorkerStatus("error");
+        if (getGazeWorkerStatus().status === "ready") setFrameError(msg.message);
       } else if (msg.type === "result") {
-        setLiveStatus(msg.sample);
+        frameInFlightRef.current = false;
+        const sample = msg.sample;
+        // Skip the re-render when nothing visible changed.
+        setLiveStatus((prev) =>
+          prev &&
+          prev.direction === sample.direction &&
+          prev.eyesDetected === sample.eyesDetected &&
+          prev.confidence === sample.confidence
+            ? prev
+            : sample,
+        );
         if (runningRef.current) {
           const videoPosSec = videoRefsRef.current[0]?.current?.currentTime ?? 0;
-          onSampleRef.current(msg.sample, videoPosSec);
+          onSampleRef.current(sample, videoPosSec);
         }
       }
-    };
-    worker.onerror = (event) => {
-      console.error("gaze-worker crashed:", event.message);
-      setLoadError(event.message);
-      setWorkerStatus("error");
-    };
-    worker.postMessage({ type: "init" });
+    });
 
     return () => {
-      worker.terminate();
+      unsubscribe();
       workerRef.current = null;
     };
   }, []);
@@ -203,7 +213,7 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
       const video = webcamVideoRef.current;
       const canvas = previewCanvasRef.current;
       if (video && canvas && video.readyState >= 2) {
-        const ctx = canvas.getContext("2d");
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
         if (ctx) {
           // Mirror horizontally so it feels like looking in a mirror --
           // matches the desktop app's default camera.mirror behavior,
@@ -222,14 +232,17 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
   const runDetectionTick = useCallback(() => {
     const worker = workerRef.current;
     const canvas = previewCanvasRef.current;
-    if (!worker || !canvas) return;
-    const ctx = canvas.getContext("2d");
+    if (!worker || !canvas || frameInFlightRef.current) return;
+    // willReadFrequently keeps the canvas CPU-backed, so getImageData()
+    // below doesn't force a slow GPU readback every tick.
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return;
 
     // Ship one RGBA frame to the worker as a transferable buffer
-    // (zero-copy). The worker's own "busy" flag drops this if it's
-    // still processing a previous frame, so it's safe to call this on a
-    // fixed interval regardless of how long a detection actually takes.
+    // (zero-copy). Skipped while a previous frame is still being
+    // processed (the worker replies to every frame), so this is safe to
+    // call on a fixed interval regardless of how long detection takes.
+    frameInFlightRef.current = true;
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     worker.postMessage(
       { type: "frame", width: canvas.width, height: canvas.height, buffer: imageData.data.buffer },
@@ -275,6 +288,7 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
     }
 
     workerRef.current?.postMessage({ type: "reset" });
+    setFrameError(null);
     runningRef.current = true;
     setRunning(true);
     setRemainingSec(testDurationMs / 1000);

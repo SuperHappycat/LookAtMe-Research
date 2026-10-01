@@ -1,6 +1,25 @@
 :root {
-  --background: #f5f7fa;
-  --foreground: #171717;
+  /* Warm, paper-and-ink palette. */
+  --background: #f6efe4;
+  --background-glow: #fbf6ee;
+  --surface: #fffaf3;
+  --surface-sunken: #f3e9db;
+  --border: #e6d8c5;
+  --border-strong: #d4c0a6;
+  --foreground: #3a2c24;
+  --muted: #86705f;
+  --primary: #b5562f;
+  --primary-hover: #9c4524;
+  --primary-soft: #f3dccd;
+  --secondary: #6f8467;
+  --secondary-hover: #5c7055;
+  --disabled: #c9b8a5;
+  --danger: #a63a2c;
+  --success: #4f7a4b;
+  --ink-dark: #2b211b;
+  --shadow: 0 1px 2px rgba(74, 52, 36, 0.06), 0 10px 30px -12px rgba(74, 52, 36, 0.18);
+  --font-serif-display: var(--font-display), Georgia, "Times New Roman", serif;
+  --font-serif-body: var(--font-body), Georgia, "Times New Roman", serif;
   color-scheme: light;
 }
 
@@ -19,8 +38,13 @@ body {
   display: flex;
   flex-direction: column;
   color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, var(--background-glow), transparent 70%),
+    var(--background);
+  background-attachment: fixed;
+  font-family: var(--font-serif-body);
+  font-size: 17px;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -31,7 +55,31 @@ body {
   margin: 0;
 }
 
+h1,
+h2,
+h3 {
+  font-family: var(--font-serif-display);
+  font-variation-settings: "SOFT" 100;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
 a {
   color: inherit;
   text-decoration: none;
+}
+
+::selection {
+  background: var(--primary-soft);
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
 }

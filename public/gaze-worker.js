@@ -23,6 +23,18 @@
  *   { type: "ready" }
  *   { type: "error", message }
  *   { type: "result", sample: { direction, eyesDetected, confidence, screenX, screenY } }
+ *   { type: "skipped" }                                -- frame arrived before init finished; dropped
+ *
+ * Every "frame" message gets exactly one reply ("result", "skipped" or
+ * "error"), so the main thread can keep a single frame in flight instead
+ * of reading back canvas pixels that would just be dropped.
+ *
+ * Performance: OpenCV.js Mats live on the WASM heap and every allocation
+ * crosses the JS<->WASM boundary, so the per-frame pipeline reuses a fixed
+ * set of scratch Mats / kernels / CLAHE instances (allocated once in
+ * init()) and works on ROI views instead of cloning sub-images. OpenCV's
+ * output functions reallocate a destination Mat only when its size/type
+ * changes, so reusing them is safe across differing ROI sizes.
  */
 
 importScripts("/opencv.js");
@@ -30,6 +42,23 @@ importScripts("/opencv.js");
 let faceCascade = null;
 let eyeCascade = null;
 let initialized = false;
+
+// Reused across frames -- see the "Performance" note above.
+let srcMat = null;
+let grayMat = null;
+let equalizedMat = null;
+let blurredMat = null;
+let enhancedMat = null;
+let threshMat = null;
+let openedMat = null;
+let hierarchyMat = null;
+let clahe = null;
+let morphKernel = null;
+let faceMinSize = null;
+let eyeMinSize = null;
+let noMaxSize = null;
+let blurSize = null;
+let blurBorder = 0;
 
 function waitForCv() {
   return new Promise((resolve) => {
@@ -61,36 +90,47 @@ async function init() {
   if (!eyeCascade.load("haarcascade_eye.xml")) {
     throw new Error("Failed to load eye cascade");
   }
+
+  grayMat = new cv.Mat();
+  equalizedMat = new cv.Mat();
+  blurredMat = new cv.Mat();
+  enhancedMat = new cv.Mat();
+  threshMat = new cv.Mat();
+  openedMat = new cv.Mat();
+  hierarchyMat = new cv.Mat();
+  clahe = new cv.CLAHE(2.0, new cv.Size(4, 4));
+  morphKernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
+  faceMinSize = new cv.Size(80, 80);
+  eyeMinSize = new cv.Size(25, 25);
+  noMaxSize = new cv.Size(0, 0);
+  blurSize = new cv.Size(5, 5);
+  blurBorder = cv.BORDER_DEFAULT | (cv.BORDER_ISOLATED ?? 16);
   initialized = true;
 }
 
 // ---- Port of vision/face_tracker.py ------------------------------------
+// Returns an ROI *view* into the shared equalized Mat (caller must
+// .delete() the view, and must be done with it before the next frame).
 function detectFace(gray) {
-  const equalized = new cv.Mat();
-  cv.equalizeHist(gray, equalized);
+  cv.equalizeHist(gray, equalizedMat);
 
   const faces = new cv.RectVector();
-  faceCascade.detectMultiScale(equalized, faces, 1.1, 5, 0, new cv.Size(80, 80), new cv.Size(0, 0));
+  faceCascade.detectMultiScale(equalizedMat, faces, 1.1, 5, 0, faceMinSize, noMaxSize);
 
-  if (faces.size() === 0) {
+  const count = faces.size();
+  if (count === 0) {
     faces.delete();
-    equalized.delete();
     return { found: false, roiGray: null };
   }
 
   let best = faces.get(0);
-  for (let i = 1; i < faces.size(); i++) {
+  for (let i = 1; i < count; i++) {
     const r = faces.get(i);
     if (r.width * r.height > best.width * best.height) best = r;
   }
   faces.delete();
 
-  const rect = new cv.Rect(best.x, best.y, best.width, best.height);
-  const roiView = equalized.roi(rect);
-  const roiGray = roiView.clone();
-  roiView.delete();
-  equalized.delete();
-
+  const roiGray = equalizedMat.roi(new cv.Rect(best.x, best.y, best.width, best.height));
   return { found: true, roiGray };
 }
 
@@ -109,40 +149,24 @@ function locatePupil(eyeRoiGray) {
   if (cropW < 4 || cropH < 4) return null;
 
   const cropView = eyeRoiGray.roi(new cv.Rect(x0, y0, cropW, cropH));
-  const crop = cropView.clone();
+  // BORDER_ISOLATED: treat the crop like a standalone image (as the old
+  // clone() did) instead of sampling neighbouring pixels at its edges.
+  cv.GaussianBlur(cropView, blurredMat, blurSize, 0, 0, blurBorder);
   cropView.delete();
 
-  const blurred = new cv.Mat();
-  cv.GaussianBlur(crop, blurred, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
-  crop.delete();
-
-  const enhanced = new cv.Mat();
-  const clahe = new cv.CLAHE(2.0, new cv.Size(4, 4));
-  clahe.apply(blurred, enhanced);
-  clahe.delete();
-  blurred.delete();
-
-  const thresh = new cv.Mat();
-  cv.threshold(enhanced, thresh, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU);
-  enhanced.delete();
-
-  const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
-  const opened = new cv.Mat();
-  cv.morphologyEx(thresh, opened, cv.MORPH_OPEN, kernel);
-  kernel.delete();
-  thresh.delete();
+  clahe.apply(blurredMat, enhancedMat);
+  cv.threshold(enhancedMat, threshMat, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU);
+  cv.morphologyEx(threshMat, openedMat, cv.MORPH_OPEN, morphKernel);
 
   const contours = new cv.MatVector();
-  const hierarchy = new cv.Mat();
-  cv.findContours(opened, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-  hierarchy.delete();
-  opened.delete();
+  cv.findContours(openedMat, contours, hierarchyMat, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
   const cropArea = cropW * cropH;
   let bestScore = -1;
   let bestCentroid = null;
 
-  for (let i = 0; i < contours.size(); i++) {
+  const contourCount = contours.size();
+  for (let i = 0; i < contourCount; i++) {
     const c = contours.get(i);
     const area = cv.contourArea(c);
     const areaFrac = area / cropArea;
@@ -185,7 +209,7 @@ function analyzeEyes(faceRoiGray) {
   const searchRegion = faceRoiGray.roi(new cv.Rect(0, 0, w, searchH));
 
   const eyes = new cv.RectVector();
-  eyeCascade.detectMultiScale(searchRegion, eyes, 1.1, 6, 0, new cv.Size(25, 25), new cv.Size(0, 0));
+  eyeCascade.detectMultiScale(searchRegion, eyes, 1.1, 6, 0, eyeMinSize, noMaxSize);
 
   if (eyes.size() === 0) {
     eyes.delete();
@@ -194,7 +218,8 @@ function analyzeEyes(faceRoiGray) {
   }
 
   const boxes = [];
-  for (let i = 0; i < eyes.size(); i++) {
+  const eyeCount = eyes.size();
+  for (let i = 0; i < eyeCount; i++) {
     const r = eyes.get(i);
     boxes.push({ x: r.x, y: r.y, width: r.width, height: r.height });
   }
@@ -203,9 +228,7 @@ function analyzeEyes(faceRoiGray) {
   const top = boxes.slice(0, 2);
 
   const observations = top.map((box) => {
-    const eyeRoiView = searchRegion.roi(new cv.Rect(box.x, box.y, box.width, box.height));
-    const eyeRoi = eyeRoiView.clone();
-    eyeRoiView.delete();
+    const eyeRoi = searchRegion.roi(new cv.Rect(box.x, box.y, box.width, box.height));
     const pupilNorm = locatePupil(eyeRoi);
     eyeRoi.delete();
     return { pupilNorm };
@@ -253,8 +276,10 @@ class GazeEstimator {
     const avgX = validPupils.reduce((s, p) => s + p[0], 0) / validPupils.length;
     const avgY = validPupils.reduce((s, p) => s + p[1], 0) / validPupils.length;
 
-    this.rawXWindow = [...this.rawXWindow, avgX].slice(-this.medianWindow);
-    this.rawYWindow = [...this.rawYWindow, avgY].slice(-this.medianWindow);
+    this.rawXWindow.push(avgX);
+    this.rawYWindow.push(avgY);
+    if (this.rawXWindow.length > this.medianWindow) this.rawXWindow.shift();
+    if (this.rawYWindow.length > this.medianWindow) this.rawYWindow.shift();
     const denoisedX = median(this.rawXWindow);
     const denoisedY = median(this.rawYWindow);
 
@@ -332,18 +357,21 @@ self.onmessage = async (e) => {
   }
 
   if (msg.type === "frame") {
-    if (!initialized || busy) return;
+    if (!initialized || busy) {
+      self.postMessage({ type: "skipped" });
+      return;
+    }
     busy = true;
     try {
       const { width, height, buffer } = msg;
-      const imageData = new ImageData(new Uint8ClampedArray(buffer), width, height);
-      const src = cv.matFromImageData(imageData);
-      const gray = new cv.Mat();
-      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-      src.delete();
+      if (!srcMat || srcMat.cols !== width || srcMat.rows !== height) {
+        srcMat?.delete();
+        srcMat = new cv.Mat(height, width, cv.CV_8UC4);
+      }
+      srcMat.data.set(new Uint8Array(buffer));
+      cv.cvtColor(srcMat, grayMat, cv.COLOR_RGBA2GRAY);
 
-      const faceResult = detectFace(gray);
-      gray.delete();
+      const faceResult = detectFace(grayMat);
 
       let eyesResult = { eyesDetected: false, observations: [] };
       if (faceResult.found && faceResult.roiGray) {
