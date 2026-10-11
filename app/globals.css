@@ -1,25 +1,29 @@
 :root {
-  /* Warm, paper-and-ink palette. */
-  --background: #f6efe4;
-  --background-glow: #fbf6ee;
-  --surface: #fffaf3;
-  --surface-sunken: #f3e9db;
-  --border: #e6d8c5;
-  --border-strong: #d4c0a6;
-  --foreground: #3a2c24;
-  --muted: #86705f;
-  --primary: #b5562f;
-  --primary-hover: #9c4524;
-  --primary-soft: #f3dccd;
-  --secondary: #6f8467;
-  --secondary-hover: #5c7055;
-  --disabled: #c9b8a5;
-  --danger: #a63a2c;
-  --success: #4f7a4b;
-  --ink-dark: #2b211b;
-  --shadow: 0 1px 2px rgba(74, 52, 36, 0.06), 0 10px 30px -12px rgba(74, 52, 36, 0.18);
-  --font-serif-display: var(--font-display), Georgia, "Times New Roman", serif;
-  --font-serif-body: var(--font-body), Georgia, "Times New Roman", serif;
+  /* Cool, modern blue palette. */
+  --background: #f4f7fc;
+  --background-glow: #e6eeff;
+  --surface: #ffffff;
+  --surface-sunken: #eef2f9;
+  --border: #dde4f0;
+  --border-strong: #c3cee0;
+  --foreground: #0f1b2d;
+  --muted: #5b6b82;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-soft: #dbe7ff;
+  --primary-shadow: rgba(37, 99, 235, 0.45);
+  --secondary: #0e7490;
+  --secondary-hover: #155e75;
+  --disabled: #b6c2d4;
+  --danger: #dc2626;
+  --success: #15803d;
+  --warning: #b45309;
+  --ink-dark: #0b1424;
+  --on-primary: #ffffff;
+  --overlay: rgba(11, 20, 36, 0.85);
+  --shadow: 0 1px 2px rgba(15, 27, 45, 0.05), 0 10px 30px -12px rgba(15, 27, 45, 0.16);
+  --font-heading: var(--font-display), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-text: var(--font-display), system-ui, -apple-system, "Segoe UI", sans-serif;
   color-scheme: light;
 }
 
@@ -42,8 +46,8 @@ body {
     radial-gradient(ellipse 80% 60% at 50% -10%, var(--background-glow), transparent 70%),
     var(--background);
   background-attachment: fixed;
-  font-family: var(--font-serif-body);
-  font-size: 17px;
+  font-family: var(--font-text);
+  font-size: 16px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -58,9 +62,8 @@ body {
 h1,
 h2,
 h3 {
-  font-family: var(--font-serif-display);
-  font-variation-settings: "SOFT" 100;
-  letter-spacing: -0.01em;
+  font-family: var(--font-heading);
+  letter-spacing: -0.02em;
   line-height: 1.2;
 }
 
