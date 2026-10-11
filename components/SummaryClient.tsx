@@ -20,7 +20,7 @@ import styles from "@/styles/shared.module.css";
 import { computeOverallScore, type RiskLevel } from "@/lib/scoring";
 import { clearSession, getSession, type ScreeningSession } from "@/lib/sessionState";
 
-const RISK_COLORS: Record<RiskLevel, string> = { Low: "#4f7a4b", Moderate: "#b97a1c", High: "#a63a2c" };
+const RISK_COLORS: Record<RiskLevel, string> = { Low: "var(--success)", Moderate: "var(--warning)", High: "var(--danger)" };
 
 export default function SummaryClient() {
   const router = useRouter();

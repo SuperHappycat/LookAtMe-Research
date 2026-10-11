@@ -14,7 +14,7 @@ import Link from "next/link";
 import styles from "@/styles/shared.module.css";
 import type { ResultRow } from "@/app/api/list-results/route";
 
-const RISK_COLORS: Record<string, string> = { Low: "#4f7a4b", Moderate: "#b97a1c", High: "#a63a2c" };
+const RISK_COLORS: Record<string, string> = { Low: "var(--success)", Moderate: "var(--warning)", High: "var(--danger)" };
 
 type State = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; rows: ResultRow[] };
 
@@ -67,7 +67,7 @@ export default function ResultsClient() {
             {row.riskLevel && (
               <span
                 className={styles.riskBadge}
-                style={{ background: RISK_COLORS[row.riskLevel] ?? "#86705f" }}
+                style={{ background: RISK_COLORS[row.riskLevel] ?? "var(--muted)" }}
               >
                 {row.riskLevel}
               </span>

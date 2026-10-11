@@ -1,9 +1,9 @@
 /**
  * styles/shared.module.css
  * ==========================
- * Shared design system for every page: a warm, cozy serif look --
- * Fraunces display headings over Source Serif 4 body text, cream
- * "paper" surfaces, clay (terracotta) primary actions and sage
+ * Shared design system for every page: a clean, modern blue look --
+ * Geist for headings and body text, white surfaces on
+ * a cool blue-gray background, blue primary actions and teal
  * secondary ones. Colors and fonts come from the CSS variables in
  * app/globals.css. Imported by every page/component that needs it --
  * CSS Modules generate unique scoped class names per importer, so
@@ -57,8 +57,7 @@
 
 .title,
 .titleCentered {
-  font-family: var(--font-serif-display);
-  font-variation-settings: "SOFT" 100;
+  font-family: var(--font-heading);
   font-size: clamp(28px, 4vw, 38px);
   font-weight: 600;
   letter-spacing: -0.015em;
@@ -76,7 +75,6 @@
 .subtitleCentered {
   color: var(--muted);
   font-size: 16px;
-  font-style: italic;
   line-height: 1.6;
   margin: 0 0 28px;
   max-width: 68ch;
@@ -140,10 +138,10 @@
 .primaryButton,
 .secondaryButton,
 .dangerButton {
-  color: #fffaf3;
+  color: var(--on-primary);
   border: none;
   border-radius: 999px;
-  font-family: var(--font-serif-body);
+  font-family: var(--font-text);
   font-weight: 600;
   letter-spacing: 0.01em;
   cursor: pointer;
@@ -154,7 +152,7 @@
   background: var(--primary);
   padding: 13px 26px;
   font-size: 16px;
-  box-shadow: 0 6px 16px -8px rgba(181, 86, 47, 0.7);
+  box-shadow: 0 6px 16px -8px var(--primary-shadow);
 }
 
 .primaryButton:hover:not(:disabled) {
@@ -199,16 +197,15 @@
   width: 260px;
   height: 58px;
   border-radius: 999px;
-  font-family: var(--font-serif-display);
-  font-variation-settings: "SOFT" 100;
+  font-family: var(--font-heading);
   font-size: 19px;
   font-weight: 600;
-  color: #fffaf3;
+  color: var(--on-primary);
   background: var(--primary);
   border: none;
   cursor: pointer;
   text-decoration: none;
-  box-shadow: 0 10px 24px -12px rgba(74, 52, 36, 0.55);
+  box-shadow: 0 10px 24px -12px var(--primary-shadow);
   transition: background 0.15s, transform 0.15s;
 }
 
@@ -298,14 +295,13 @@
 .videoLabel {
   text-align: center;
   font-size: 14px;
-  font-style: italic;
   color: var(--muted);
   margin-bottom: 8px;
 }
 
 .timer {
   text-align: center;
-  font-family: var(--font-serif-display);
+  font-family: var(--font-heading);
   font-size: 20px;
   font-weight: 600;
   color: var(--primary);
@@ -325,8 +321,8 @@
 }
 
 .statusText {
-  background: rgba(43, 33, 27, 0.88);
-  color: #fffaf3;
+  background: var(--overlay);
+  color: var(--on-primary);
   font-size: 13px;
   padding: 5px 12px;
   border-radius: 999px;
@@ -357,8 +353,7 @@
 }
 
 .statValue {
-  font-family: var(--font-serif-display);
-  font-variation-settings: "SOFT" 100;
+  font-family: var(--font-heading);
   font-size: 30px;
   font-weight: 600;
   color: var(--primary);
@@ -368,7 +363,6 @@
 
 .statLabel {
   font-size: 14px;
-  font-style: italic;
   color: var(--muted);
   margin-top: 4px;
 }
@@ -407,8 +401,7 @@
 }
 
 .overallScore {
-  font-family: var(--font-serif-display);
-  font-variation-settings: "SOFT" 100;
+  font-family: var(--font-heading);
   font-size: 44px;
   font-weight: 600;
   color: var(--primary);
@@ -422,7 +415,7 @@
   border-radius: 999px;
   font-weight: 600;
   font-size: 15px;
-  color: #fffaf3;
+  color: var(--on-primary);
 }
 
 .sessionRow {
