@@ -10,15 +10,22 @@
  * App.create_patient_session().
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "@/styles/shared.module.css";
 import { MONTH_NAMES, THAI_PROVINCES, daysInMonth } from "@/lib/provinces";
 import { startNewSession } from "@/lib/sessionState";
+import { preloadGazeWorker } from "@/lib/gazeWorkerClient";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 export default function IntakeClient() {
+  // Start loading OpenCV.js in the background while the form is filled
+  // in, so Test 1 is usually ready the moment it opens.
+  useEffect(() => {
+    preloadGazeWorker();
+  }, []);
+
   const router = useRouter();
   const today = useMemo(() => new Date(), []);
   const years = useMemo(() => {

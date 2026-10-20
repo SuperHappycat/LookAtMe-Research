@@ -20,7 +20,7 @@ import styles from "@/styles/shared.module.css";
 import { computeOverallScore, type RiskLevel } from "@/lib/scoring";
 import { clearSession, getSession, type ScreeningSession } from "@/lib/sessionState";
 
-const RISK_COLORS: Record<RiskLevel, string> = { Low: "#2e7d32", Moderate: "#f9a825", High: "#c62828" };
+const RISK_COLORS: Record<RiskLevel, string> = { Low: "var(--success)", Moderate: "var(--warning)", High: "var(--danger)" };
 
 export default function SummaryClient() {
   const router = useRouter();
@@ -139,7 +139,7 @@ export default function SummaryClient() {
       )}
 
       <div className={styles.overallCard}>
-        <div className={styles.overallScore} style={{ color: "#1565c0" }}>
+        <div className={styles.overallScore}>
           Overall Score: {result.overallScore.toFixed(0)} / 100
         </div>
         <span className={styles.riskBadge} style={{ background: RISK_COLORS[result.riskLevel] }}>

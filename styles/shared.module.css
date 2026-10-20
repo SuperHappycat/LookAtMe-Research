@@ -1,29 +1,28 @@
 /**
  * styles/shared.module.css
  * ==========================
- * Shared design system for every page, matching the desktop app's
- * look (config.py's UIConfig: primary #1565C0, accent #42A5F5,
- * background #F5F7FA, Segoe UI, white rounded cards) so the web port
- * reads as the same product. Imported by every page/component that
- * needs it -- CSS Modules generate unique scoped class names per
- * importer, so sharing one file across many components is safe and
- * normal (not a global-namespace collision risk).
+ * Shared design system for every page: a clean, modern blue look --
+ * Geist for headings and body text, white surfaces on
+ * a cool blue-gray background, blue primary actions and teal
+ * secondary ones. Colors and fonts come from the CSS variables in
+ * app/globals.css. Imported by every page/component that needs it --
+ * CSS Modules generate unique scoped class names per importer, so
+ * sharing one file across many components is safe and normal (not a
+ * global-namespace collision risk).
  */
 
 .page {
   max-width: 1600px;
   margin: 0 auto;
-  padding: 32px 20px 60px;
-  font-family: "Segoe UI", system-ui, sans-serif;
-  color: #1a1a1a;
+  padding: 40px 20px 72px;
+  width: 100%;
 }
 
 .pageNarrow {
   max-width: 720px;
   margin: 0 auto;
-  padding: 40px 20px 60px;
-  font-family: "Segoe UI", system-ui, sans-serif;
-  color: #1a1a1a;
+  padding: 48px 20px 72px;
+  width: 100%;
 }
 
 .pageFull {
@@ -35,9 +34,6 @@
   justify-content: center;
   gap: 8px;
   padding: 40px 20px;
-  font-family: "Segoe UI", system-ui, sans-serif;
-  color: #1a1a1a;
-  box-sizing: border-box;
 }
 
 .logo {
@@ -49,73 +45,88 @@
 
 .logoBig {
   display: block;
-  margin: 0 auto 12px;
+  margin: 0 auto 20px;
   width: min(420px, 70vw);
   height: auto;
 }
 
 .header {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
-.title {
-  font-size: 26px;
-  font-weight: 700;
-  color: #1565c0;
-  margin: 0 0 6px;
+.title,
+.titleCentered {
+  font-family: var(--font-heading);
+  font-size: clamp(28px, 4vw, 38px);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  color: var(--foreground);
+  margin: 0 0 10px;
 }
 
 .titleCentered {
-  font-size: 26px;
-  font-weight: 700;
-  color: #1565c0;
-  margin: 0 0 12px;
   text-align: center;
+  margin-bottom: 14px;
 }
 
-.subtitle {
-  color: #607d8b;
-  font-size: 14px;
-  margin: 0 0 24px;
+.subtitle,
+.subtitleCentered {
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0 0 28px;
+  max-width: 68ch;
 }
 
 .subtitleCentered {
-  color: #607d8b;
-  font-size: 14px;
-  margin: 0 0 24px;
   text-align: center;
-  line-height: 1.6;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .card {
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 12px;
-  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: var(--shadow);
 }
 
 .field {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 
 .field label {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
-  color: #37474f;
+  color: var(--foreground);
 }
 
 .field input,
-.field select {
-  padding: 10px 12px;
-  border: 1px solid #cfd8dc;
-  border-radius: 8px;
-  font-size: 14px;
+.field select,
+.inlineSelectRow select {
+  padding: 11px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  font-size: 16px;
   font-family: inherit;
-  background: white;
+  color: var(--foreground);
+  background: var(--background-glow);
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.field input:focus,
+.field select:focus,
+.inlineSelectRow select:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
 .inlineSelectRow {
@@ -124,51 +135,51 @@
   flex-wrap: wrap;
 }
 
-.inlineSelectRow select {
-  padding: 10px 12px;
-  border: 1px solid #cfd8dc;
-  border-radius: 8px;
-  font-size: 14px;
-  font-family: inherit;
-  background: white;
+.primaryButton,
+.secondaryButton,
+.dangerButton {
+  color: var(--on-primary);
+  border: none;
+  border-radius: 999px;
+  font-family: var(--font-text);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 
 .primaryButton {
-  background: #1565c0;
-  color: white;
-  border: none;
-  padding: 12px 22px;
-  border-radius: 22px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
+  background: var(--primary);
+  padding: 13px 26px;
+  font-size: 16px;
+  box-shadow: 0 6px 16px -8px var(--primary-shadow);
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
 }
 
 .primaryButton:disabled {
-  background: #90a4ae;
+  background: var(--disabled);
+  box-shadow: none;
   cursor: not-allowed;
 }
 
 .secondaryButton {
-  background: #90a4ae;
-  color: white;
-  border: none;
-  padding: 10px 18px;
-  border-radius: 18px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
+  background: var(--secondary);
+  padding: 11px 20px;
+  font-size: 15px;
+}
+
+.secondaryButton:hover:not(:disabled) {
+  background: var(--secondary-hover);
 }
 
 .dangerButton {
-  background: #c62828;
-  color: white;
-  border: none;
-  padding: 10px 18px;
-  border-radius: 18px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
+  background: var(--danger);
+  padding: 11px 20px;
+  font-size: 15px;
 }
 
 .navRow {
@@ -176,7 +187,7 @@
   gap: 18px;
   flex-wrap: wrap;
   justify-content: center;
-  margin-top: 20px;
+  margin-top: 24px;
 }
 
 .navButton {
@@ -184,19 +195,36 @@
   align-items: center;
   justify-content: center;
   width: 260px;
-  height: 56px;
-  border-radius: 28px;
-  font-size: 17px;
-  font-weight: 700;
-  color: white;
+  height: 58px;
+  border-radius: 999px;
+  font-family: var(--font-heading);
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--on-primary);
+  background: var(--primary);
   border: none;
   cursor: pointer;
   text-decoration: none;
+  box-shadow: 0 10px 24px -12px var(--primary-shadow);
+  transition: background 0.15s, transform 0.15s;
+}
+
+.navButton:hover {
+  background: var(--primary-hover);
+  transform: translateY(-2px);
+}
+
+.navButtonSecondary {
+  background: var(--secondary);
+}
+
+.navButtonSecondary:hover {
+  background: var(--secondary-hover);
 }
 
 .videoRow {
   display: flex;
-  gap: 20px;
+  gap: 24px;
   flex-wrap: wrap;
   justify-content: center;
   position: relative;
@@ -223,58 +251,62 @@
   left: -9999px;
 }
 
+.videoPanel,
+.videoPanelSingle {
+  background: var(--ink-dark);
+  border-radius: 18px;
+  overflow: hidden;
+  border: 6px solid var(--surface);
+  box-shadow: var(--shadow);
+}
+
 .videoPanel {
   flex: 1 1 480px;
   max-width: 760px;
-  background: #212121;
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.videoPanel video {
-  /* All stimulus clips are natively 16:9 -- matching the frame to that
-     ratio (instead of guessing 4:3) means object-fit: contain never has
-     to letterbox, so the dark frame hugs the video with no black bars. */
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  height: auto;
-  max-height: 70vh;
-  object-fit: contain;
-  background: #212121;
-  display: block;
 }
 
 .videoPanelSingle {
   flex: 1 1 100%;
   max-width: 1200px;
   margin: 0 auto;
-  background: #212121;
-  border-radius: 10px;
-  overflow: hidden;
 }
 
+.videoPanel video,
 .videoPanelSingle video {
+  /* All stimulus clips are natively 16:9 -- matching the frame to that
+     ratio (instead of guessing 4:3) means object-fit: contain never has
+     to letterbox, so the dark frame hugs the video with no black bars. */
   width: 100%;
   aspect-ratio: 16 / 9;
   height: auto;
-  max-height: 78vh;
   object-fit: contain;
-  background: #212121;
+  background: var(--ink-dark);
   display: block;
+}
+
+.videoPanel video {
+  max-height: 70vh;
+}
+
+.videoPanelSingle video {
+  max-height: 78vh;
 }
 
 .videoLabel {
   text-align: center;
-  font-size: 12px;
-  color: #607d8b;
-  margin-bottom: 6px;
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 8px;
 }
 
 .timer {
   text-align: center;
-  font-weight: 700;
-  color: #1565c0;
-  margin: 16px 0 4px;
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--primary);
+  margin: 20px 0 4px;
+  font-variant-numeric: tabular-nums;
 }
 
 .cornerPreviewWrap {
@@ -284,51 +316,55 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 6px;
+  gap: 8px;
   z-index: 10;
 }
 
 .statusText {
-  background: rgba(17, 17, 17, 0.85);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 6px;
+  background: var(--overlay);
+  color: var(--on-primary);
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
 }
 
 .previewCanvas {
   width: 220px;
   height: 165px;
-  border-radius: 8px;
-  background: #111;
-  border: 2px solid #1565c0;
+  border-radius: 16px;
+  background: var(--ink-dark);
+  border: 4px solid var(--surface);
+  box-shadow: var(--shadow);
 }
 
 .resultsGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 14px;
-  margin: 20px 0;
+  margin: 20px 0 24px;
 }
 
 .statTile {
-  background: #f5f7fa;
-  border-radius: 10px;
-  padding: 14px;
+  background: var(--surface-sunken);
+  border-radius: 16px;
+  padding: 18px 14px;
   text-align: center;
 }
 
 .statValue {
-  font-size: 22px;
-  font-weight: 700;
-  color: #1565c0;
+  font-family: var(--font-heading);
+  font-size: 30px;
+  font-weight: 600;
+  color: var(--primary);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
 }
 
 .statLabel {
-  font-size: 12px;
-  color: #607d8b;
-  margin-top: 2px;
+  font-size: 14px;
+  color: var(--muted);
+  margin-top: 4px;
 }
 
 .saveRow {
@@ -340,13 +376,13 @@
 }
 
 .errorText {
-  color: #c62828;
-  font-size: 13px;
+  color: var(--danger);
+  font-size: 15px;
 }
 
 .successText {
-  color: #2e7d32;
-  font-size: 13px;
+  color: var(--success);
+  font-size: 15px;
   font-weight: 600;
 }
 
@@ -355,33 +391,37 @@
 }
 
 .overallCard {
-  background: white;
-  border: 2px solid #e0e0e0;
-  border-radius: 16px;
-  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 32px 24px;
   text-align: center;
   margin: 20px 0;
+  box-shadow: var(--shadow);
 }
 
 .overallScore {
-  font-size: 30px;
-  font-weight: 700;
-  margin-bottom: 6px;
+  font-family: var(--font-heading);
+  font-size: 44px;
+  font-weight: 600;
+  color: var(--primary);
+  line-height: 1.1;
+  margin-bottom: 12px;
 }
 
 .riskBadge {
   display: inline-block;
-  padding: 6px 18px;
-  border-radius: 16px;
-  font-weight: 700;
-  font-size: 14px;
-  color: white;
+  padding: 6px 20px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--on-primary);
 }
 
 .sessionRow {
-  background: #fafafa;
-  border-radius: 8px;
-  padding: 14px 16px;
+  background: var(--surface-sunken);
+  border-radius: 14px;
+  padding: 14px 18px;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -390,5 +430,5 @@
 }
 
 .sessionRow strong {
-  font-size: 13px;
+  font-size: 15px;
 }
