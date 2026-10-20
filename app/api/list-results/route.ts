@@ -47,21 +47,22 @@ export async function GET() {
 
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: `${tab}!A1:R`,
+      range: `${tab}!A1:L`,
     });
 
     const rows = res.data.values ?? [];
-    // Columns: Timestamp, Name, Email, DOB, Province, ... Overall Score
-    // (col Q, index 16), Risk Level (col R, index 17). See save-result
-    // for the full layout.
+    // Columns: Timestamp, Name, Email, DOB, Province, Test1 Human%,
+    // Test1 Geometric%, Test2 Face%, Test2 Object%, Test3 Accuracy%,
+    // Overall Score (col K, index 10), Risk Level (col L, index 11).
+    // See save-result for the full layout.
     const results: ResultRow[] = rows
       .map((r) => ({
         timestamp: r[0] ?? "",
         name: r[1] ?? "",
         email: r[2] ?? "",
         province: r[4] ?? "",
-        overallScore: r[16] ?? "",
-        riskLevel: r[17] ?? "",
+        overallScore: r[10] ?? "",
+        riskLevel: r[11] ?? "",
       }))
       // Only rows with a genuine ISO timestamp in column A -- skips a
       // header row cleanly regardless of what it says, if the sheet has one.

@@ -27,6 +27,8 @@ export default function SummaryClient() {
   const [session, setSession] = useState<ScreeningSession | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [emailState, setEmailState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   useEffect(() => {
     // sessionStorage doesn't exist during this component's server render,
@@ -66,6 +68,25 @@ export default function SummaryClient() {
     } catch (err) {
       setSaveState("error");
       setSaveError(err instanceof Error ? err.message : String(err));
+    }
+  }, [session, result]);
+
+  const handleEmailReport = useCallback(async () => {
+    if (!session?.patient) return;
+    setEmailState("sending");
+    setEmailError(null);
+    try {
+      const res = await fetch("/api/send-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...session, overallScore: result.overallScore, riskLevel: result.riskLevel }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to send.");
+      setEmailState("sent");
+    } catch (err) {
+      setEmailState("error");
+      setEmailError(err instanceof Error ? err.message : String(err));
     }
   }, [session, result]);
 
@@ -151,11 +172,22 @@ export default function SummaryClient() {
         <button className={styles.primaryButton} onClick={handleSave} disabled={saveState === "saving"}>
           {saveState === "saving" ? "Saving…" : "Save to Google Sheet"}
         </button>
+        <button
+          className={styles.secondaryButton}
+          onClick={handleEmailReport}
+          disabled={emailState === "sending"}
+        >
+          {emailState === "sending" ? "Sending…" : `Email Report${session.patient.email ? ` to ${session.patient.email}` : ""}`}
+        </button>
         <button className={styles.secondaryButton} onClick={handleStartOver}>
           Start Over
         </button>
+      </div>
+      <div className={styles.saveRow} style={{ justifyContent: "center" }}>
         {saveState === "saved" && <span className={styles.successText}>Saved ✓</span>}
         {saveState === "error" && <span className={styles.errorText}>{saveError}</span>}
+        {emailState === "sent" && <span className={styles.successText}>Email sent ✓</span>}
+        {emailState === "error" && <span className={styles.errorText}>{emailError}</span>}
       </div>
 
       <p className={styles.subtitleCentered} style={{ marginTop: 24 }}>

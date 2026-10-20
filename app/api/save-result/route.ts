@@ -14,11 +14,12 @@
  *   GOOGLE_SHEET_ID
  *   GOOGLE_SHEET_TAB            (optional, defaults to "Sheet1")
  *
- * Row layout (columns A-R): Timestamp, Name, Email, Date of Birth,
- * Province, Test1 Human%, Test1 Geometric%, Test1 Switches, Test1 Avg
- * Fixation ms, Test1 Human Side, Test2 Face%, Test2 Object%, Test3
- * Block%, Test3 Face%, Test3 Accuracy%, Test3 Latency ms, Overall
- * Score, Risk Level.
+ * Row layout (columns A-L): Timestamp, Name, Email, Date of Birth,
+ * Province, Test1 Human%, Test1 Geometric%, Test2 Face%, Test2 Object%,
+ * Test3 Accuracy%, Overall Score, Risk Level -- a deliberately trimmed
+ * subset (the app itself still tracks switches/avg fixation/human
+ * side/block%/latency internally, for its own result screens; the
+ * Sheet just doesn't need them).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -26,9 +27,9 @@ import { google } from "googleapis";
 
 interface SaveResultBody {
   patient?: { name?: string; email?: string; dateOfBirth?: string; province?: string };
-  test1?: { humanPct?: number; geometricPct?: number; switches?: number; avgFixationMs?: number; humanSide?: string };
+  test1?: { humanPct?: number; geometricPct?: number };
   test2?: { facePct?: number; objectPct?: number };
-  test3?: { blockPct?: number; facePct?: number; accuracyPct?: number; latencyMs?: number | null };
+  test3?: { accuracyPct?: number };
   overallScore?: number;
   riskLevel?: string;
 }
@@ -78,15 +79,9 @@ export async function POST(request: NextRequest) {
       patient?.province ?? "",
       test1?.humanPct?.toFixed(1) ?? "",
       test1?.geometricPct?.toFixed(1) ?? "",
-      test1?.switches ?? "",
-      test1?.avgFixationMs?.toFixed(0) ?? "",
-      test1?.humanSide ?? "",
       test2?.facePct?.toFixed(1) ?? "",
       test2?.objectPct?.toFixed(1) ?? "",
-      test3?.blockPct?.toFixed(1) ?? "",
-      test3?.facePct?.toFixed(1) ?? "",
       test3?.accuracyPct?.toFixed(1) ?? "",
-      test3?.latencyMs != null ? test3.latencyMs.toFixed(0) : "",
       body.overallScore?.toFixed(1) ?? "",
       body.riskLevel ?? "",
     ];

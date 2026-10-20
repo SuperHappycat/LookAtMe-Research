@@ -116,11 +116,47 @@ it isn't configured yet.
    - `GOOGLE_SHEET_ID` — the ID from step 5
    - `GOOGLE_SHEET_TAB` — optional, defaults to `Sheet1`
 
-Each saved session appends one row (columns A-R): timestamp, name,
-email, date of birth, province, Test 1 (human%, geometric%, switches,
-avg fixation ms, which side showed the human clip), Test 2 (face%,
-object%), Test 3 (block%, face%, accuracy%, latency ms), overall
-score, risk level.
+Each saved session appends one row (columns A-L): timestamp, name,
+email, date of birth, province, Test 1 (human%, geometric%), Test 2
+(face%, object%), Test 3 (accuracy%), overall score, risk level -- a
+deliberately trimmed subset of what the app tracks internally (gaze
+switches, avg fixation, which side showed the human clip, Test 3's
+block%/latency are still shown on each test's own results screen,
+just not written to the Sheet).
+
+## Email setup
+
+The Summary page's **Email Report** button sends the finished summary
+to the email address entered on the Intake page (before any test
+starts), via Gmail SMTP (`nodemailer` -- `app/api/send-report/route.ts`
+/ `lib/mailer.ts`). This is separate from any Claude/claude.ai Gmail
+connector -- the deployed app needs its own sender credentials.
+
+1. **Turn on 2-Step Verification** on the Gmail account you want to
+   send FROM: https://myaccount.google.com/security -- App Passwords
+   require it.
+2. **Create an App Password**: https://myaccount.google.com/apppasswords
+   → App name "LookAtMe" (or anything) → Create. Copy the 16-character
+   password it shows you (spaces don't matter, they're stripped) --
+   this is NOT your normal Gmail password, and it's shown only once.
+3. **Set environment variables** (same `.env.local` / Vercel Project
+   Settings → Environment Variables as the Sheets setup above):
+   - `GMAIL_USER` — the Gmail address itself (e.g. `you@gmail.com`)
+   - `GMAIL_APP_PASSWORD` — the App Password from step 2
+
+Without these set, clicking **Email Report** shows a clear "not
+configured" error instead of crashing -- same pattern as Google Sheets.
+
+### Alternative: send the email from Google Sheets itself
+
+If you'd rather not set `GMAIL_USER`/`GMAIL_APP_PASSWORD` in the app,
+`apps-script/send-report-email.gs` does the same thing from inside the
+Sheet instead: a script watches for new rows (via an installable
+`onChange` trigger) and emails the patient automatically the moment
+"Save to Google Sheet" appends one -- no separate button, no app-side
+credentials, sends as whichever Google account owns the Sheet. See the
+setup steps in that file's header comment. You can use this instead of
+the Email Report button, or alongside it -- they don't conflict.
 
 ## Deploying to Vercel
 
