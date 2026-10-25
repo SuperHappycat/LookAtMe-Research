@@ -1,54 +1,120 @@
 "use client";
 
 /**
- * lib/research/queue.ts — STUB from Wave 0. Agent E replaces the implementation
- * (IndexedDB + sync loop) but MUST keep these exported signatures.
+ * lib/research/queue.ts
+ * =======================
+ * The device's upload queue (spec §5.4): offline screenings and screen recordings wait here,
+ * in IndexedDB, until they are uploaded. Logic: ./offline/queueCore.ts. Storage:
+ * ./offline/idb.ts (in-memory fallback when IndexedDB is unavailable).
  *
  * Other agents only call: enqueue(), registerUploader(), pending(), onChange(), syncNow().
+ * Sync runs on the `online` event, at app start and on a timer (startSyncLoop(), called by
+ * components/research/offline/OfflineBoot.tsx).
  */
 
-import type { QueueItem, QueueItemKind, Uploader } from "./contracts";
+import { NeedsReviewError, type QueueItem, type QueueItemKind, type Uploader } from "./contracts";
+import { OFFLINE_CONFIG } from "./offline/config";
+import { idbAvailable, IdbQueueStore } from "./offline/idb";
+import { MemoryQueueStore, QueueCore, type QueueCounts, type QueueStore } from "./offline/queueCore";
 
-const items = new Map<string, { item: QueueItem; blob: Blob | null }>();
-const uploaders = new Map<QueueItemKind, Uploader>();
-const listeners = new Set<() => void>();
+let store: QueueStore | null = null;
+let core: QueueCore | null = null;
+let gate: (() => Promise<boolean>) | null = null;
 
-const notify = () => listeners.forEach((l) => l());
+/** Sync waits while this returns false (set by offline/boot.ts: "is a user signed in?"). */
+export function setSyncGate(fn: () => Promise<boolean>): void {
+  gate = fn;
+}
+
+export function queueStore(): QueueStore {
+  if (!store) store = idbAvailable() ? new IdbQueueStore() : new MemoryQueueStore();
+  return store;
+}
+
+function q(): QueueCore {
+  if (!core) {
+    core = new QueueCore(queueStore(), {
+      isOnline: () => typeof navigator === "undefined" || navigator.onLine !== false,
+      canSync: async () => (gate ? gate() : true),
+      reviewCode: (err) => (err instanceof NeedsReviewError ? err.code || "needs_review" : null),
+    });
+  }
+  return core;
+}
 
 /** Adds an item (and optional blob) to the queue, then tries to sync. */
 export async function enqueue(item: QueueItem, blob: Blob | null = null): Promise<void> {
-  items.set(item.id, { item, blob });
-  notify();
+  await q().enqueue(item, blob);
   void syncNow();
 }
 
 /** Registers the function that uploads one kind of item. */
 export function registerUploader<K extends QueueItemKind>(kind: K, fn: Uploader<Extract<QueueItem, { kind: K }>>): void {
-  uploaders.set(kind, fn as Uploader);
+  q().registerUploader(kind, fn as Uploader);
+  void syncNow();
 }
 
+/** Every item still on this device (waiting and needs-review), sessions first, oldest first. */
 export async function pending(): Promise<QueueItem[]> {
-  return [...items.values()].map((v) => v.item);
+  return q().pending();
 }
 
 /** Subscribe to queue changes; returns an unsubscribe function. */
 export function onChange(cb: () => void): () => void {
-  listeners.add(cb);
-  return () => listeners.delete(cb);
+  return q().onChange(cb);
 }
 
-/** Tries to upload everything pending (stub: in memory, one pass). */
+/** Tries to upload everything that is due. Never throws. */
 export async function syncNow(): Promise<void> {
-  for (const [id, { item, blob }] of items) {
-    const up = uploaders.get(item.kind);
-    if (!up) continue;
-    try {
-      await up(item, blob);
-      items.delete(id);
-    } catch (err) {
-      item.attempts += 1;
-      item.lastError = err instanceof Error ? err.message : String(err);
-    }
+  try {
+    await q().syncNow();
+  } catch (err) {
+    console.warn("[queue] sync failed", err);
   }
-  notify();
+}
+
+// ---------------------------------------------------------------- extra exports (E)
+
+export function counts(): Promise<QueueCounts> {
+  return q().counts();
+}
+
+/** Clears "needs review"/backoff for one item and syncs. */
+export async function retryItem(id: string): Promise<void> {
+  await q().retry(id);
+  void syncNow();
+}
+
+/** Deletes one item and its blob. Callers must confirm with the user first. */
+export function removeItem(id: string): Promise<void> {
+  return q().remove(id);
+}
+
+/** Links an offline session's clientSessionId to its server session id (fills waiting recordings). */
+export function linkSession(clientSessionId: string, sessionId: string): Promise<void> {
+  return q().linkSession(clientSessionId, sessionId);
+}
+
+/** Server session id for a clientSessionId once its offline session has synced, else null. */
+export function linkedSessionId(clientSessionId: string): Promise<string | null> {
+  return q().linkedSessionId(clientSessionId);
+}
+
+/** Removes all queue items, blobs and cached offline data from this device. */
+export function clearQueue(): Promise<void> {
+  return q().clear();
+}
+
+let loopStarted = false;
+
+/** Sync now, on every `online` event, when the tab becomes visible, and on a timer. Idempotent. */
+export function startSyncLoop(): void {
+  if (loopStarted || typeof window === "undefined") return;
+  loopStarted = true;
+  window.addEventListener("online", () => void syncNow());
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") void syncNow();
+  });
+  window.setInterval(() => void syncNow(), OFFLINE_CONFIG.syncIntervalMs);
+  void syncNow();
 }

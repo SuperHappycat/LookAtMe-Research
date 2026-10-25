@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
+import OfflineBoot from "@/components/research/offline/OfflineBoot";
 
 // Geist (crisp, modern geometric sans) for both headings and body text.
 const geist = Geist({
@@ -16,7 +17,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${geist.variable}`}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <OfflineBoot />
+      </body>
     </html>
   );
 }
