@@ -1,0 +1,101 @@
+/* Agent A (Phase 4): Google Drive settings and recording links. Uses tokens from app/globals.css. */
+
+.banner {
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin: 0 0 16px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-sunken);
+  line-height: 1.5;
+}
+
+.bannerWarn {
+  composes: banner;
+  border-color: var(--warning);
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 8%, var(--surface));
+}
+
+.bannerOk {
+  composes: banner;
+  border-color: var(--success);
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 8%, var(--surface));
+}
+
+.statusLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 4px 0 12px;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  background: var(--disabled);
+}
+
+.dotActive {
+  composes: dot;
+  background: var(--success);
+}
+
+.dotWarn {
+  composes: dot;
+  background: var(--warning);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.choice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin: 8px 0;
+  cursor: pointer;
+}
+
+.choice input {
+  margin-top: 4px;
+}
+
+.choiceOn {
+  composes: choice;
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.small {
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.recList {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: grid;
+  gap: 6px;
+}
+
+.missing {
+  color: var(--warning);
+}
+
+@media (max-width: 600px) {
+  .actions > * {
+    flex: 1 1 100%;
+  }
+}

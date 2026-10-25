@@ -21,6 +21,12 @@ export interface ResearchContext {
   startedAt: string;
   /** Child's age in months at the start of the screening (chooses child-mode calibration). */
   ageMonths?: number | null;
+  /** Parent consented to video recording (A records only when true). Set by the start flow (B/E). */
+  allowRecording?: boolean;
+  /** Blind mode: staff must not see the result on the summary page (B). */
+  blind?: boolean;
+  /** True when the session was started offline; sessionId is then "" until it syncs (E). */
+  offline?: boolean;
   cameraCheck?: {
     faceFoundPct: number | null;
     meanLuma: number | null;

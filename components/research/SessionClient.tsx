@@ -14,6 +14,7 @@ import { ageInMonths } from "@/lib/research/screening";
 import { useResearch } from "./ResearchShell";
 import RiskBadge from "./RiskBadge";
 import GazeReplay from "./GazeReplay";
+import RecordingLinks from "@/lib/research/drive/RecordingLinks";
 
 interface SessionDetail {
   id: string;
@@ -156,6 +157,9 @@ export default function SessionClient() {
           </ul>
         )}
       </div>
+
+      <h2 className={rs.sectionTitle}>วิดีโอบันทึก / Recordings</h2>
+      <RecordingLinks sessionId={s.id} />
 
       <h2 className={rs.sectionTitle}>เล่นซ้ำพร้อมจุดการมอง / Replay with gaze dot</h2>
       {rows === null ? (

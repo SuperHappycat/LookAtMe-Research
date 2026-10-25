@@ -20,12 +20,15 @@ import styles from "@/styles/shared.module.css";
 import { computeOverallScore, type RiskLevel } from "@/lib/scoring";
 import { clearSession, getSession, type ScreeningSession } from "@/lib/sessionState";
 import ResearchSaveCard from "@/components/research/ResearchSaveCard";
+import { getResearchContext } from "@/lib/research/screening";
 
 const RISK_COLORS: Record<RiskLevel, string> = { Low: "var(--success)", Moderate: "var(--warning)", High: "var(--danger)" };
 
 export default function SummaryClient() {
   const router = useRouter();
   const [session, setSession] = useState<ScreeningSession | null>(null);
+  // Blind mode (hospital): the result is saved as usual but not shown on this screen.
+  const [blind, setBlind] = useState(false);
 
   useEffect(() => {
     // sessionStorage doesn't exist during this component's server render,
@@ -34,6 +37,7 @@ export default function SummaryClient() {
     // this effect reads the real value right after mount.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSession(getSession());
+    setBlind(!!getResearchContext()?.blind);
   }, []);
 
   // Computed unconditionally (before the early returns below) so both
@@ -97,35 +101,48 @@ export default function SummaryClient() {
         </p>
       )}
 
-      <div className={styles.overallCard}>
-        <div className={styles.overallScore}>
-          Overall Score: {result.overallScore.toFixed(0)} / 100
+      {blind ? (
+        <div className={styles.overallCard}>
+          <div className={styles.overallScore} style={{ fontSize: 20 }}>
+            ผลถูกปิดไว้ (blind mode) / Result hidden
+          </div>
+          <p className={styles.subtitleCentered} style={{ margin: 0 }}>
+            ผลจะเห็นได้เฉพาะผู้ดูแลองค์กร / Only organization admins can see this result.
+          </p>
         </div>
-        <span className={styles.riskBadge} style={{ background: RISK_COLORS[result.riskLevel] }}>
-          {result.riskLevel} Risk
-        </span>
-      </div>
+      ) : (
+        <>
+          <div className={styles.overallCard}>
+            <div className={styles.overallScore}>
+              Overall Score: {result.overallScore.toFixed(0)} / 100
+            </div>
+            <span className={styles.riskBadge} style={{ background: RISK_COLORS[result.riskLevel] }}>
+              {result.riskLevel} Risk
+            </span>
+          </div>
 
-      <div className={styles.resultsGrid}>
-        <div className={styles.statTile}>
-          <div className={styles.statValue}>
-            {session.test1 ? `${session.test1.humanPct.toFixed(0)}%` : "—"}
+          <div className={styles.resultsGrid}>
+            <div className={styles.statTile}>
+              <div className={styles.statValue}>
+                {session.test1 ? `${session.test1.humanPct.toFixed(0)}%` : "—"}
+              </div>
+              <div className={styles.statLabel}>Test 1: Human Preference</div>
+            </div>
+            <div className={styles.statTile}>
+              <div className={styles.statValue}>
+                {session.test2 ? `${session.test2.facePct.toFixed(0)}%` : "—"}
+              </div>
+              <div className={styles.statLabel}>Test 2: Face Attention</div>
+            </div>
+            <div className={styles.statTile}>
+              <div className={styles.statValue}>
+                {session.test3 ? `${session.test3.accuracyPct.toFixed(0)}%` : "—"}
+              </div>
+              <div className={styles.statLabel}>Test 3: Joint Attention</div>
+            </div>
           </div>
-          <div className={styles.statLabel}>Test 1: Human Preference</div>
-        </div>
-        <div className={styles.statTile}>
-          <div className={styles.statValue}>
-            {session.test2 ? `${session.test2.facePct.toFixed(0)}%` : "—"}
-          </div>
-          <div className={styles.statLabel}>Test 2: Face Attention</div>
-        </div>
-        <div className={styles.statTile}>
-          <div className={styles.statValue}>
-            {session.test3 ? `${session.test3.accuracyPct.toFixed(0)}%` : "—"}
-          </div>
-          <div className={styles.statLabel}>Test 3: Joint Attention</div>
-        </div>
-      </div>
+        </>
+      )}
 
       {/* Research app: results are saved to Supabase for the selected child
           (the original Google Sheet / Gmail buttons are removed). */}
