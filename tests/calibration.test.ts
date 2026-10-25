@@ -107,8 +107,8 @@ test("simulation: fixation-only samples beat fixed-time samples (saccades + nois
     }
     return sum / val.length;
   };
-  const e1 = evalErr(fitGazeModel(v1, 0.01));
-  const e2 = evalErr(fitGazeModel(v2, 0.01));
+  const e1 = evalErr(fitGazeModel(v1, 0.01, "full"));
+  const e2 = evalErr(fitGazeModel(v2, 0.01, "full"));
   assert.ok(e2 < e1 * 0.6, `fixation-filtered error ${e2.toFixed(1)} px should be well below fixed-time ${e1.toFixed(1)} px`);
 });
 

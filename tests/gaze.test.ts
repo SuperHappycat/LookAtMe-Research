@@ -32,7 +32,7 @@ test("fitGazeModel recovers a known smooth mapping", () => {
     const f = { ex: rand() * 0.3, ey: rand() * 0.2, hx: rand() * 0.2, hy: rand() * 0.1, px: 0.5 + rand() * 0.1, py: 0.45 + rand() * 0.1, s: 0.3 + rand() * 0.05, yaw: rand() * 0.2, pitch: rand() * 0.1 };
     return { features: f, ...truth(f.ex, f.ey, f.hx) };
   });
-  const model = fitGazeModel(samples, 1e-6);
+  const model = fitGazeModel(samples, 1e-6, "full");
   const probe = { ex: 0.05, ey: -0.04, hx: 0.03, hy: 0, px: 0.5, py: 0.45, s: 0.3, yaw: 0.02, pitch: 0 };
   const p = predictGaze(model, probe);
   const t = truth(probe.ex, probe.ey, probe.hx);
