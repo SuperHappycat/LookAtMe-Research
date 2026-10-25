@@ -55,6 +55,7 @@ export function friendlyError(err: unknown): string {
   if (msg.includes("no_consent"))
     return "ยังไม่มีใบยินยอมจากผู้ปกครอง / No parent consent recorded for this child.";
   if (msg.includes("seats_full")) return "ที่นั่งเต็มแล้ว / All staff seats are used.";
+  if (msg.includes("feature_not_in_plan")) return "แผนของคุณไม่มีฟังก์ชันนี้ / This feature isn't in your plan.";
   if (msg.includes("org_change_not_allowed")) return "ย้ายเด็กไปองค์กรอื่นไม่ได้ / A child can't be moved to another organization.";
   if (msg.includes("not_allowed") || msg.includes("row-level security"))
     return "ไม่มีสิทธิ์ทำรายการนี้ / You don't have permission for this.";

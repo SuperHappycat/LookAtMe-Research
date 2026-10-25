@@ -15,7 +15,7 @@ import rs from "@/styles/research.module.css";
 import b from "@/styles/research-b.module.css";
 import { apiFetch, friendlyError, getSupabase } from "@/lib/research/supabase/client";
 import { ageInMonths } from "@/lib/research/screening";
-import { cacheChildForOffline, startScreening as startScreeningFlow } from "@/lib/research/offline/start";
+import { cacheChildForOffline, forgetCachedChild, startScreening as startScreeningFlow } from "@/lib/research/offline/start";
 import { getGazeEngine } from "@/lib/research/gaze";
 import { planHas } from "@/lib/research/plans";
 import { WITHDRAW_REASONS, type WithdrawReason } from "@/lib/research/followup/config";
@@ -227,9 +227,12 @@ export default function ChildClient() {
       // Organization's blind setting (column from migration 20261026000301; treated as off if unavailable).
       const o = await sb.from("organizations").select("blind_new_sessions").eq("id", ch.org_id).maybeSingle();
       setOrgBlind(!o.error && !!(o.data as { blind_new_sessions?: boolean } | null)?.blind_new_sessions);
-      void cacheChildForOffline(ch, ks ? { allow_recording: ks.allow_recording, allow_research: ks.allow_research } : null).catch(
-        () => undefined,
-      );
+      const blindNow = !o.error && !!(o.data as { blind_new_sessions?: boolean } | null)?.blind_new_sessions;
+      void cacheChildForOffline(
+        ch,
+        ks ? { allow_recording: ks.allow_recording, allow_research: ks.allow_research } : null,
+        { blind: blindNow },
+      ).catch(() => undefined);
     }
   }, [id]);
 
@@ -428,7 +431,14 @@ export default function ChildClient() {
       {isAdmin && (
         <>
           <h2 className={rs.sectionTitle}>ความยินยอม / Consent withdrawal</h2>
-          <WithdrawPanel child={child} onDone={setWithdrawn} />
+          <WithdrawPanel
+            child={child}
+            onDone={(s) => {
+              // Also forget the child on this device so it can't be screened offline any more.
+              void forgetCachedChild(child.id).catch(() => undefined);
+              setWithdrawn(s);
+            }}
+          />
         </>
       )}
     </div>

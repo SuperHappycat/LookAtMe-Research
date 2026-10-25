@@ -47,6 +47,9 @@ export function bootOffline(): void {
       linkSession,
     }),
   );
+  // Agent A's "recording" uploader registers itself on import; load it at app start so
+  // recordings queued earlier (or offline) upload from any page.
+  void import("../recordingUploader").catch((err) => console.warn("[offline] recording uploader failed to load", err));
   startSyncLoop();
 }
 

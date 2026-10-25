@@ -14,7 +14,7 @@
  * the browser from IndexedDB/Supabase); no API or database responses are ever stored.
  */
 
-const VERSION = "v1";
+const VERSION = "v2";
 const PREFIX = "lookatme-research-";
 const STATIC_CACHE = `${PREFIX}static-${VERSION}`;
 const PAGE_CACHE = `${PREFIX}pages-${VERSION}`;

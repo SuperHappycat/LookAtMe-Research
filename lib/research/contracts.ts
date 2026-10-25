@@ -33,6 +33,8 @@ export interface RecordingQueueItem extends QueueItemBase {
   size: number;
   /** Where it should end up. "local_only" items are downloaded, never uploaded. */
   target: "google_drive" | "local_only";
+  /** Test level the recording belongs to (one recording per level). */
+  level?: 1 | 2 | 3;
 }
 
 /** A whole screening done offline (produced and synced by E). */
@@ -56,8 +58,12 @@ export type Uploader<T extends QueueItem = QueueItem> = (item: T, blob: Blob | n
 
 /** Errors an uploader can throw so the queue marks the item for a person instead of retrying forever. */
 export class NeedsReviewError extends Error {
-  constructor(public code: string, message: string) {
+  // No TypeScript parameter property: Node's strip-only test runner can't load those.
+  code: string;
+  constructor(code: string, message: string) {
     super(message);
+    this.code = code;
+    this.name = "NeedsReviewError";
   }
 }
 

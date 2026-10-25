@@ -16,6 +16,8 @@ import styles from "@/styles/shared.module.css";
 import rs from "@/styles/research.module.css";
 import { apiFetch, getSupabase, supabaseConfigured } from "@/lib/research/supabase/client";
 import { PLANS, ROLE_LABELS, planHas, type MemberRole, type PlanKey } from "@/lib/research/plans";
+import { cachePlanStatus } from "@/lib/research/offline/start";
+import SyncStatusChip from "./offline/SyncStatusChip";
 
 export interface Organization {
   id: string;
@@ -44,6 +46,35 @@ interface ResearchContextValue {
 
 const ResearchContext = createContext<ResearchContextValue | null>(null);
 const ACTIVE_KEY = "lookatme_active_org";
+const MEMBERSHIPS_KEY = "lookatme_memberships_";
+
+function readJson<T>(key: string): T | null {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeJson(key: string, value: unknown) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // ignore
+  }
+}
+
+/** supabase-js keeps its session in localStorage under "sb-<project>-auth-token". */
+function storedSession(): Session | null {
+  try {
+    const key = Object.keys(window.localStorage).find((k) => /^sb-.*-auth-token$/.test(k));
+    const s = key ? readJson<Session>(key) : null;
+    return s && s.user ? s : null;
+  } catch {
+    return null;
+  }
+}
 
 export function useResearch(): ResearchContextValue {
   const ctx = useContext(ResearchContext);
@@ -68,8 +99,11 @@ export default function ResearchShell({ children }: { children: React.ReactNode 
   useEffect(() => {
     if (!configured) return;
     const sb = getSupabase();
-    sb.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: sub } = sb.auth.onAuthStateChange((_e, s) => setSession(s));
+    // Offline with an expired token, supabase-js can't refresh and reports no session; keep using the
+    // stored one so offline screening still works (data access is still checked by the server at sync).
+    const withOfflineFallback = (s: Session | null) => s ?? (navigator.onLine ? null : storedSession());
+    sb.auth.getSession().then(({ data }) => setSession(withOfflineFallback(data.session)));
+    const { data: sub } = sb.auth.onAuthStateChange((_e, s) => setSession(withOfflineFallback(s)));
     return () => sub.subscription.unsubscribe();
   }, [configured]);
 
@@ -83,14 +117,25 @@ export default function ResearchShell({ children }: { children: React.ReactNode 
       .from("members")
       .select("role, organizations(id, name, type, plan, screening_quota, screenings_used, seats, expires_on)")
       .eq("user_id", session.user.id);
+    const cacheKey = `${MEMBERSHIPS_KEY}${session.user.id}`;
+    let list: Membership[];
     if (err) {
-      setError(err.message);
-      return;
+      // Offline: use the list cached at the last online visit (organization info only, no child data).
+      const cached = readJson<Membership[]>(cacheKey);
+      if (!cached) {
+        setError(err.message);
+        return;
+      }
+      list = cached;
+    } else {
+      list = (data ?? [])
+        .map((r) => ({ role: r.role as MemberRole, org: r.organizations as unknown as Organization }))
+        .filter((m) => m.org)
+        .sort((a, b) => a.org.name.localeCompare(b.org.name));
+      writeJson(cacheKey, list);
+      // Spec §5.4: cache each org's plan status at login, for offline screening limits.
+      list.forEach((m) => void cachePlanStatus(m.org));
     }
-    const list = (data ?? [])
-      .map((r) => ({ role: r.role as MemberRole, org: r.organizations as unknown as Organization }))
-      .filter((m) => m.org)
-      .sort((a, b) => a.org.name.localeCompare(b.org.name));
     setMemberships(list);
     let stored: string | null = null;
     try {
@@ -147,6 +192,26 @@ export default function ResearchShell({ children }: { children: React.ReactNode 
   }
 
   const logout = async () => {
+    // Offline data (waiting uploads, cached children) is cleared on logout; warn if anything is unsent.
+    const { pending } = await import("@/lib/research/queue");
+    const n = (await pending()).length;
+    if (
+      n > 0 &&
+      !window.confirm(
+        `มี ${n} รายการยังไม่ได้ส่ง จะถูกลบเมื่อออกจากระบบ / ${n} item(s) not uploaded will be deleted on logout. Continue?`,
+      )
+    ) {
+      return;
+    }
+    const { clearOfflineData } = await import("@/lib/research/offline/boot");
+    await clearOfflineData();
+    try {
+      Object.keys(window.localStorage)
+        .filter((k) => k.startsWith(MEMBERSHIPS_KEY))
+        .forEach((k) => window.localStorage.removeItem(k));
+    } catch {
+      // ignore
+    }
     await getSupabase().auth.signOut();
     router.replace("/login");
   };
@@ -159,6 +224,7 @@ export default function ResearchShell({ children }: { children: React.ReactNode 
     { href: "/r/analysis", label: "วิเคราะห์ / Analysis" },
     ...(plan && planHas(plan, "diagnosis_follow_up") ? [{ href: "/r/stats", label: "ความแม่นยำ / Accuracy" }] : []),
     ...(plan && planHas(plan, "multi_site") ? [{ href: "/r/studies", label: "โครงการวิจัย / Studies" }] : []),
+    { href: "/r/offline", label: "ออฟไลน์ / Offline" },
     ...(active?.role === "admin" ? [{ href: "/r/team", label: "ทีม / Team" }] : []),
     ...(active?.role === "admin" ? [{ href: "/r/settings", label: "ตั้งค่า / Settings" }] : []),
     ...(isPlatformAdmin ? [{ href: "/r/admin", label: "LookAtMe admin" }] : []),
@@ -183,6 +249,7 @@ export default function ResearchShell({ children }: { children: React.ReactNode 
             ))}
           </nav>
           <div className={rs.topbarRight}>
+            <SyncStatusChip />
             {memberships.length > 1 && (
               <select
                 className={rs.select}
