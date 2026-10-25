@@ -19,14 +19,22 @@ export async function inviteMember(
   if (orgErr) throw new HttpError(500, orgErr.message);
   if (!org) throw new HttpError(404, "Organization not found.");
 
-  const { count } = await svc.from("members").select("user_id", { count: "exact", head: true }).eq("org_id", orgId);
-  if ((count ?? 0) >= org.seats) {
-    throw new HttpError(409, `ที่นั่งเต็มแล้ว (${org.seats}) / All ${org.seats} staff seats are used.`);
+  const existing = await findUserByEmail(email);
+  let alreadyMember = false;
+  if (existing) {
+    const { data: m } = await svc.from("members").select("user_id").eq("org_id", orgId).eq("user_id", existing.id).maybeSingle();
+    alreadyMember = !!m;
+  }
+  // Checked before sending any email; the database trigger is the final guard.
+  if (!alreadyMember) {
+    const { count } = await svc.from("members").select("user_id", { count: "exact", head: true }).eq("org_id", orgId);
+    if ((count ?? 0) >= org.seats) {
+      throw new HttpError(409, `ที่นั่งเต็มแล้ว (${org.seats}) / All ${org.seats} staff seats are used.`);
+    }
   }
 
   let userId: string;
   let invited = false;
-  const existing = await findUserByEmail(email);
   if (existing) {
     userId = existing.id;
   } else {
@@ -41,7 +49,12 @@ export async function inviteMember(
   const { error: memErr } = await svc
     .from("members")
     .upsert({ user_id: userId, org_id: orgId, role }, { onConflict: "user_id,org_id" });
-  if (memErr) throw new HttpError(500, memErr.message);
+  if (memErr) {
+    if (memErr.message.includes("seats_full")) {
+      throw new HttpError(409, `ที่นั่งเต็มแล้ว (${org.seats}) / All ${org.seats} staff seats are used.`);
+    }
+    throw new HttpError(500, memErr.message);
+  }
   await audit(orgId, inviterId, "invite", role);
   return { userId, invited };
 }

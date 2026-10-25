@@ -19,6 +19,16 @@ import { inviteMember } from "@/lib/research/supabase/invite";
 import type { MemberRole } from "@/lib/research/plans";
 
 const ROLES: MemberRole[] = ["admin", "staff", "viewer"];
+const LAST_ADMIN_MSG = "ต้องมีผู้ดูแลอย่างน้อย 1 คน / An organization needs at least one admin.";
+
+/** Refuses to demote the organization's only admin (re-inviting them with a lower role). */
+async function ensureNotLastAdmin(orgId: string, email: string) {
+  const svc = getServiceClient();
+  const { data: admins } = await svc.from("members").select("user_id").eq("org_id", orgId).eq("role", "admin");
+  if ((admins ?? []).length !== 1) return;
+  const { data: u } = await svc.auth.admin.getUserById(admins![0].user_id);
+  if (u.user?.email?.toLowerCase() === email) throw new HttpError(409, LAST_ADMIN_MSG);
+}
 
 export const GET = handle(async (req) => {
   const user = await requireUser(req);
@@ -51,6 +61,7 @@ export const POST = handle(async (req) => {
   await requireOrgRole(user.id, orgId, ["admin"]);
   if (!EMAIL_RE.test(email)) throw new HttpError(400, "Please enter a valid email address.");
   if (!ROLES.includes(role)) throw new HttpError(400, "Unknown role.");
+  if (role !== "admin") await ensureNotLastAdmin(orgId, email);
   const result = await inviteMember(req, orgId, email, role, user.id);
   return Response.json(result);
 });
@@ -64,7 +75,7 @@ export const DELETE = handle(async (req) => {
   const svc = getServiceClient();
   const { data: admins } = await svc.from("members").select("user_id").eq("org_id", orgId).eq("role", "admin");
   if ((admins ?? []).length === 1 && admins?.[0].user_id === userId) {
-    throw new HttpError(409, "ต้องมีผู้ดูแลอย่างน้อย 1 คน / An organization needs at least one admin.");
+    throw new HttpError(409, LAST_ADMIN_MSG);
   }
   const { error } = await svc.from("members").delete().eq("org_id", orgId).eq("user_id", userId);
   if (error) throw new HttpError(500, error.message);

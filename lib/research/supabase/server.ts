@@ -85,8 +85,14 @@ export async function findUserByEmail(email: string): Promise<User | null> {
   return null;
 }
 
+/**
+ * Base URL for links in emails. In production APP_URL must be set: falling back to the
+ * request's Host header would let a crafted request send invite links to another site.
+ */
 export function appUrl(req: Request): string {
-  return process.env.APP_URL ?? new URL(req.url).origin;
+  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/+$/, "");
+  if (process.env.NODE_ENV === "production") throw new HttpError(500, "APP_URL is not configured on the server.");
+  return new URL(req.url).origin;
 }
 
 /** Wraps a route handler: turns HttpError into JSON responses. */

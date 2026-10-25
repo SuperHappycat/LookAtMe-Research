@@ -68,7 +68,7 @@ is limited to a few emails per hour, which is fine for a prototype.
 
 ## Checked here (cloud sandbox)
 
-- `npm test`: 25 tests pass.
+- `npm test`: 27 tests pass.
   - **RLS tests run the real migration** on an in-memory Postgres with stand-ins for Supabase's auth and storage.
     They show cross-organization isolation for every table and the bucket; that role limits and blind mode work;
     that drive tokens can't be read; and that `start_session` / `complete_session` enforce consent, expiry and
@@ -82,6 +82,21 @@ is limited to a few emails per hour, which is fine for a prototype.
 - Dashboard (with CSV download) and session page (replay dot moving) rendered with mocked data.
 
 **Not checked:** a real Supabase project (it doesn't exist yet), real invite emails, and MediaPipe with a real face.
+
+## Security review (independent pass, fixed)
+
+| Finding | Fix |
+| --- | --- |
+| A child could be moved to another org by someone who is staff in both; the old consent still counted | Trigger blocks changes to `children.org_id`; consent check now also matches the org |
+| Blind sessions' files were visible to staff and viewers | `session_files` and storage reads go through `can_read_session()` (admins only for blind) |
+| Staff could overwrite or rename other sessions' gaze files, or point a session at another CSV | Writes only to `<org>/<own session>.csv`; `complete_session` requires that exact path and is limited to the staff member who ran the session (or an admin) |
+| Invite links could follow the request's Host header | `APP_URL` is required in production |
+| Seat limit could be passed by parallel invites; the last admin could be demoted by re-invite | Seat limit enforced by a database trigger; last-admin check also on role change |
+| Any member could write any audit action | `log_action` accepts only `view_session`, `export_sessions_csv`, `export_gaze_csv` |
+| Drive test route | Refused in every production build, even if the flag is set |
+
+Still open (low): an org admin can add an *existing* account by email without that person accepting, and quota is
+checked at start but used at completion, so many sessions started at the same moment can go slightly over.
 
 ## Known limits / next
 

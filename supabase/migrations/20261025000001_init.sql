@@ -149,6 +149,62 @@ exception when others then
   return null;
 end $$;
 
+-- "<org_id>/<session_id>.csv" -> session id, or null.
+create or replace function public.path_session(p text) returns uuid
+language plpgsql immutable as $$
+begin
+  if p !~ '^[0-9a-fA-F-]{36}/[0-9a-fA-F-]{36}\.csv$' then return null; end if;
+  return split_part(split_part(p, '/', 2), '.', 1)::uuid;
+exception when others then
+  return null;
+end $$;
+
+-- Can the caller read this session's files? Members of the org, except blind sessions (admins only).
+-- SECURITY DEFINER so the check sees blind sessions that RLS hides from the caller.
+create or replace function public.can_read_session(p_session uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.sessions s
+    where s.id = p_session
+      and public.is_member(s.org_id)
+      and (not s.blind or public.has_role(s.org_id, '{admin}'))
+  );
+$$;
+
+-- Can the caller write the gaze file at this path? Only "<org>/<session>.csv" for a session of that org
+-- that the caller ran (or any session, for org admins).
+create or replace function public.can_write_gaze(p_name text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.sessions s
+    where s.id = public.path_session(p_name)
+      and s.org_id = public.path_org(p_name)
+      and (
+        (s.staff_id = auth.uid() and public.has_role(s.org_id, '{admin,staff}'))
+        or public.has_role(s.org_id, '{admin}')
+      )
+  );
+$$;
+
+-- A child can never move to another organization (its consents, sessions and files stay with the old one).
+create or replace function public.children_keep_org() returns trigger
+language plpgsql as $$
+begin
+  if new.org_id is distinct from old.org_id then raise exception 'org_change_not_allowed'; end if;
+  return new;
+end $$;
+
+-- Seat limit, enforced in the database (serialised per organization, so parallel invites can't exceed it).
+create or replace function public.members_seat_check() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v_seats int; v_count int;
+begin
+  select seats into v_seats from public.organizations where id = new.org_id for update;
+  select count(*) into v_count from public.members where org_id = new.org_id;
+  if v_count >= v_seats then raise exception 'seats_full'; end if;
+  return new;
+end $$;
+
 -- ---------------------------------------------------------------- RLS
 alter table public.organizations     enable row level security;
 alter table public.platform_admins   enable row level security;
@@ -181,7 +237,8 @@ create policy consents_insert on public.consents for insert to authenticated
 create policy sessions_select on public.sessions for select to authenticated
   using (public.is_member(org_id) and (not blind or public.has_role(org_id, '{admin}')));
 
-create policy session_files_select on public.session_files for select to authenticated using (public.is_member(org_id));
+create policy session_files_select on public.session_files for select to authenticated
+  using (public.can_read_session(session_id));
 
 create policy diagnoses_select on public.diagnoses for select to authenticated
   using (public.has_role(org_id, '{admin,staff}'));
@@ -197,13 +254,18 @@ create policy audit_select on public.audit_log for select to authenticated using
 insert into storage.buckets (id, name, public) values ('gaze', 'gaze', false) on conflict (id) do nothing;
 
 create policy gaze_read on storage.objects for select to authenticated
-  using (bucket_id = 'gaze' and public.is_member(public.path_org(name)));
+  using (bucket_id = 'gaze' and public.can_read_session(public.path_session(name)));
 create policy gaze_upload on storage.objects for insert to authenticated
-  with check (bucket_id = 'gaze' and public.has_role(public.path_org(name), '{admin,staff}'));
+  with check (bucket_id = 'gaze' and public.can_write_gaze(name));
 -- needed for upsert (re-saving a session's gaze CSV after a failed save)
 create policy gaze_update on storage.objects for update to authenticated
-  using (bucket_id = 'gaze' and public.has_role(public.path_org(name), '{admin,staff}'))
-  with check (bucket_id = 'gaze' and public.has_role(public.path_org(name), '{admin,staff}'));
+  using (bucket_id = 'gaze' and public.can_write_gaze(name))
+  with check (bucket_id = 'gaze' and public.can_write_gaze(name));
+
+create trigger children_keep_org before update on public.children
+  for each row execute function public.children_keep_org();
+create trigger members_seat_check before insert on public.members
+  for each row execute function public.members_seat_check();
 
 -- ---------------------------------------------------------------- RPCs
 -- Starts a screening: checks role, plan expiry, quota and consent. Idempotent on p_client_session_id.
@@ -225,7 +287,9 @@ begin
   select * into o from public.organizations where id = v_org;
   if o.expires_on < current_date then raise exception 'plan_expired'; end if;
   if o.screening_quota is not null and o.screenings_used >= o.screening_quota then raise exception 'quota_reached'; end if;
-  if not exists (select 1 from public.consents where child_id = p_child and withdrawn_at is null) then
+  if not exists (
+    select 1 from public.consents where child_id = p_child and org_id = v_org and withdrawn_at is null
+  ) then
     raise exception 'no_consent';
   end if;
 
@@ -242,10 +306,16 @@ returns text language plpgsql security definer set search_path = public as $$
 declare s public.sessions; v_status text; v_risk text;
 begin
   select * into s from public.sessions where id = p_session for update;
-  if s.id is null or not public.has_role(s.org_id, '{admin,staff}') then raise exception 'not_allowed'; end if;
+  if s.id is null
+     or not (
+       (s.staff_id = auth.uid() and public.has_role(s.org_id, '{admin,staff}'))
+       or public.has_role(s.org_id, '{admin}')
+     ) then
+    raise exception 'not_allowed';
+  end if;
 
   if p_gaze_path is not null then
-    if public.path_org(p_gaze_path) is distinct from s.org_id then raise exception 'bad_path'; end if;
+    if p_gaze_path <> s.org_id::text || '/' || s.id::text || '.csv' then raise exception 'bad_path'; end if;
     insert into public.session_files (org_id, session_id, kind, location, path, size_bytes)
     values (s.org_id, s.id, 'gaze_csv', 'supabase', p_gaze_path, nullif(p_data->>'gaze_bytes', '')::bigint)
     on conflict (session_id, kind) do update set path = excluded.path, size_bytes = excluded.size_bytes;
@@ -285,6 +355,7 @@ create or replace function public.log_action(p_org uuid, p_action text, p_target
 returns void language plpgsql security definer set search_path = public as $$
 begin
   if not public.is_member(p_org) then raise exception 'not_allowed'; end if;
+  if p_action not in ('view_session', 'export_sessions_csv', 'export_gaze_csv') then raise exception 'bad_action'; end if;
   insert into public.audit_log (org_id, user_id, action, target) values (p_org, auth.uid(), left(p_action, 60), left(p_target, 200));
 end $$;
 

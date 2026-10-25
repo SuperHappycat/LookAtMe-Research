@@ -54,6 +54,8 @@ export function friendlyError(err: unknown): string {
     return "แผนการใช้งานหมดอายุ ติดต่อ LookAtMe เพื่อต่ออายุ / Plan expired — contact LookAtMe to renew.";
   if (msg.includes("no_consent"))
     return "ยังไม่มีใบยินยอมจากผู้ปกครอง / No parent consent recorded for this child.";
+  if (msg.includes("seats_full")) return "ที่นั่งเต็มแล้ว / All staff seats are used.";
+  if (msg.includes("org_change_not_allowed")) return "ย้ายเด็กไปองค์กรอื่นไม่ได้ / A child can't be moved to another organization.";
   if (msg.includes("not_allowed") || msg.includes("row-level security"))
     return "ไม่มีสิทธิ์ทำรายการนี้ / You don't have permission for this.";
   if (msg.includes("duplicate key") && msg.includes("children"))

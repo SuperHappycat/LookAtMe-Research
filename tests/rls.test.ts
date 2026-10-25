@@ -39,7 +39,7 @@ const SUPABASE_GRANTS = `
 grant usage on schema public, auth, storage to anon, authenticated;
 grant all on all tables in schema public to authenticated;
 grant all on all sequences in schema public to authenticated;
-grant select, insert on storage.objects to authenticated;
+grant select, insert, update on storage.objects to authenticated;
 grant execute on function auth.uid() to anon, authenticated;
 `;
 
@@ -190,6 +190,7 @@ test("complete_session uses quota once, and not for retests", async () => {
     await rows("select public.complete_session($1, $2::jsonb, $3)", [s, data, path]);
     assert.equal((await rows("select * from public.session_files where session_id = $1", [s])).length, 1);
     await expectError(rows("select public.complete_session($1, $2::jsonb, $3)", [s, data, `${ID.orgB}/x.csv`]), /bad_path/);
+    await expectError(rows("select public.complete_session($1, $2::jsonb, $3)", [s, data, `${ID.orgA}/other.csv`]), /bad_path/);
 
     const [{ start_session: r }] = await rows("select public.start_session($1, gen_random_uuid())", [ID.childA]);
     const [{ complete_session: st2 }] = await rows("select public.complete_session($1, $2::jsonb)", [
@@ -221,24 +222,67 @@ test("blind sessions are hidden from staff but visible to admins", async () => {
   await db.exec(`update public.sessions set blind = false`);
 });
 
-test("gaze storage is limited to the user's own organisation folder", async () => {
+test("gaze files: only <org>/<own session>.csv can be written; blind files hidden", async () => {
+  const [{ start_session: sid }] = await as(ID.staffA, () =>
+    rows("select public.start_session($1, gen_random_uuid())", [ID.childA]),
+  );
+  const own = `${ID.orgA}/${sid}.csv`;
   await as(ID.staffA, async () => {
-    await rows("insert into storage.objects (bucket_id, name) values ('gaze', $1)", [`${ID.orgA}/s1.csv`]);
-    await expectError(rows("insert into storage.objects (bucket_id, name) values ('gaze', $1)", [`${ID.orgB}/s1.csv`]), /row-level security/);
-    await expectError(rows("insert into storage.objects (bucket_id, name) values ('gaze', 'not-a-uuid/s1.csv')"), /row-level security/);
+    await rows("insert into storage.objects (bucket_id, name) values ('gaze', $1)", [own]);
+    for (const bad of [`${ID.orgB}/${sid}.csv`, `${ID.orgA}/s1.csv`, "not-a-uuid/x.csv", `${ID.orgA}/${sid}.txt`]) {
+      await expectError(rows("insert into storage.objects (bucket_id, name) values ('gaze', $1)", [bad]), /row-level security/);
+    }
   });
-  await db.exec(`insert into storage.objects (bucket_id, name) values ('gaze', '${ID.orgB}/b.csv')`);
-  const seenA = await as(ID.adminA, () => rows("select name from storage.objects"));
-  assert.deepEqual(seenA.map((r) => r.name), [`${ID.orgA}/s1.csv`]);
+  // another staff member of the same org can't overwrite it, a viewer can't write at all
+  await db.exec(`insert into auth.users (id, email) values ('40000000-0000-0000-0000-00000000000a', 's2@a')`);
+  await db.exec(`update public.organizations set seats = 10 where id = '${ID.orgA}'`);
+  await db.exec(`insert into public.members (user_id, org_id, role) values ('40000000-0000-0000-0000-00000000000a', '${ID.orgA}', 'staff')`);
+  await as("40000000-0000-0000-0000-00000000000a", async () => {
+    await expectError(rows("insert into storage.objects (bucket_id, name) values ('gaze', $1)", [own]), /row-level security/);
+    assert.equal((await rows("update storage.objects set name = name where name = $1 returning id", [own])).length, 0);
+    await expectError(rows("select public.complete_session($1, '{}'::jsonb)", [sid]), /not_allowed/);
+  });
   await as(ID.viewerA, async () => {
-    await expectError(rows("insert into storage.objects (bucket_id, name) values ('gaze', $1)", [`${ID.orgA}/v.csv`]), /row-level security/);
+    await expectError(rows("insert into storage.objects (bucket_id, name) values ('gaze', $1)", [`${ID.orgA}/${sid}.csv`]), /row-level security/);
   });
+  await db.exec(`insert into storage.objects (bucket_id, name) values ('gaze', '${ID.orgB}/${ID.childB}.csv')`);
+  const seenA = await as(ID.viewerA, () => rows("select name from storage.objects"));
+  assert.deepEqual(seenA.map((r) => r.name), [own], "org A viewer sees only org A's file");
+
+  // blind: file row and object hidden from staff/viewer, visible to admin
+  await as(ID.staffA, () => rows("select public.complete_session($1, $2::jsonb, $3)", [sid, JSON.stringify({ risk_level: "Low" }), own]));
+  await db.exec(`update public.sessions set blind = true where id = '${sid}'`);
+  for (const u of [ID.staffA, ID.viewerA]) {
+    assert.equal((await as(u, () => rows("select * from public.session_files where session_id = $1", [sid]))).length, 0);
+    assert.equal((await as(u, () => rows("select * from storage.objects where name = $1", [own]))).length, 0);
+  }
+  assert.equal((await as(ID.adminA, () => rows("select * from storage.objects where name = $1", [own]))).length, 1);
+  await db.exec(`update public.sessions set blind = false`);
+});
+
+test("a child can't be moved to another organization", async () => {
+  await db.exec(`insert into public.members (user_id, org_id, role) values ('${ID.staffA}', '${ID.orgB}', 'staff')`);
+  await as(ID.staffA, async () => {
+    await expectError(rows("update public.children set org_id = $1 where id = $2", [ID.orgB, ID.childA]), /org_change_not_allowed/);
+  });
+  await db.exec(`delete from public.members where user_id = '${ID.staffA}' and org_id = '${ID.orgB}'`);
+});
+
+test("seat limit is enforced in the database", async () => {
+  await db.exec(`insert into auth.users (id, email) values ('50000000-0000-0000-0000-00000000000b', 'x@b')`);
+  await db.exec(`update public.organizations set seats = 1 where id = '${ID.orgB}'`);
+  await expectError(
+    db.exec(`insert into public.members (user_id, org_id, role) values ('50000000-0000-0000-0000-00000000000b', '${ID.orgB}', 'staff')`),
+    /seats_full/,
+  );
+  await db.exec(`update public.organizations set seats = 15 where id = '${ID.orgB}'`);
 });
 
 test("log_action only works for members", async () => {
-  await as(ID.staffA, () => rows("select public.log_action($1, 'export_csv', 'sessions')", [ID.orgA]));
+  await as(ID.staffA, () => rows("select public.log_action($1, 'export_sessions_csv', 'sessions')", [ID.orgA]));
+  await as(ID.staffA, () => expectError(rows("select public.log_action($1, 'invite')", [ID.orgA]), /bad_action/));
   await as(ID.stranger, () => expectError(rows("select public.log_action($1, 'x')", [ID.orgA]), /not_allowed/));
   const seen = await as(ID.adminA, () => rows("select action from public.audit_log"));
-  assert.deepEqual(seen.map((r) => r.action), ["export_csv"]);
+  assert.deepEqual(seen.map((r) => r.action), ["export_sessions_csv"]);
   assert.equal((await as(ID.staffA, () => rows("select * from public.audit_log"))).length, 0, "staff can't read audit log");
 });

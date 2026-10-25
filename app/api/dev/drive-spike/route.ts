@@ -15,7 +15,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
-  if (process.env.ENABLE_DEV_TOOLS !== "1") {
+  // Local development only: never available in a production build, even if the flag is set.
+  if (process.env.ENABLE_DEV_TOOLS !== "1" || process.env.NODE_ENV === "production") {
     return NextResponse.json({ error: "dev tools disabled" }, { status: 404 });
   }
 
