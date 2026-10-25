@@ -29,6 +29,8 @@ export interface EngineSample {
   point: GazePoint | null;
   /** performance.now() when the frame was submitted. */
   tMs: number;
+  /** Face width / camera image width (MediaPipe only), used for the distance check. */
+  faceScale?: number | null;
 }
 
 export type EngineStatus = "loading" | "ready" | "error";

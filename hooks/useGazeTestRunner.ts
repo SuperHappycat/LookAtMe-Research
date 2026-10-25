@@ -23,6 +23,7 @@ import { getGazeEngine, type EngineSample, type EngineStatus } from "@/lib/resea
 import { directionFromPoint, type Box } from "@/lib/research/gaze/direction";
 import { getCalibrationState } from "@/lib/research/gaze/calibrationStore";
 import { RESEARCH_CONFIG } from "@/lib/research/config";
+import { researchLogger } from "@/lib/research/researchLogger";
 
 export type WorkerSample = EngineSample;
 export type WorkerStatus = EngineStatus;
@@ -155,14 +156,11 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
         // A calibrated point (MediaPipe) becomes Left/Center/Right from
         // where the stimulus videos sit on screen; OpenCV samples pass
         // through unchanged.
+        const boxes = stimulusBoxes(videoRefsRef.current);
         const sample: WorkerSample = msg.sample.point
           ? {
               ...msg.sample,
-              direction: directionFromPoint(
-                msg.sample.point,
-                stimulusBoxes(videoRefsRef.current),
-                RESEARCH_CONFIG.aoiMarginPx,
-              ),
+              direction: directionFromPoint(msg.sample.point, boxes, RESEARCH_CONFIG.aoiMarginPx),
             }
           : msg.sample;
         // Skip the re-render when nothing visible changed.
@@ -177,6 +175,8 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
         if (runningRef.current) {
           const videoPosSec = videoRefsRef.current[0]?.current?.currentTime ?? 0;
           onSampleRef.current(sample, videoPosSec);
+          // Research app: keep every sample for the gaze CSV / quality score.
+          researchLogger.sample(sample, videoPosSec, boxes);
         }
       }
     });
@@ -200,6 +200,7 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
     videoRefsRef.current.forEach((ref) => ref.current?.pause());
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    researchLogger.stop();
     onStopRef.current();
     setRunning(false);
   }, [stopAllLoops]);
@@ -305,6 +306,10 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
     }
 
     engine.reset();
+    researchLogger.start(
+      videoRefsRef.current.map((r) => r.current),
+      () => previewCanvasRef.current,
+    );
     setFrameError(null);
     runningRef.current = true;
     setRunning(true);
@@ -317,7 +322,7 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
     }, 250);
     stopTimeoutRef.current = window.setTimeout(() => stopRef.current(), testDurationMs);
     return true;
-  }, [testDurationMs, runDetectionTick, webcamVideoRef, tryPlayAll]);
+  }, [testDurationMs, runDetectionTick, webcamVideoRef, previewCanvasRef, tryPlayAll]);
 
   return {
     workerStatus,

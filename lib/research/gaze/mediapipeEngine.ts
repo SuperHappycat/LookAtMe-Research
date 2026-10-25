@@ -128,6 +128,7 @@ export const mediapipeEngine: GazeEngine = {
         faceFound,
         point,
         tMs,
+        faceScale: f ? f.features.s : null,
       },
     });
     return true;

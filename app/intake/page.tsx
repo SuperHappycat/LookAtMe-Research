@@ -1,9 +1,7 @@
-import IntakeClient from "@/components/IntakeClient";
+import { redirect } from "next/navigation";
 
-export const metadata = {
-  title: "Patient Information — LookAtMe Web",
-};
-
+// Research app: children are registered by code at /r (no names, emails or provinces).
+// The original intake form, components/IntakeClient.tsx, is kept for upstream merges.
 export default function IntakePage() {
-  return <IntakeClient />;
+  redirect("/r");
 }
