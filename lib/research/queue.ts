@@ -20,6 +20,12 @@ import { MemoryQueueStore, QueueCore, type QueueCounts, type QueueStore } from "
 let store: QueueStore | null = null;
 let core: QueueCore | null = null;
 let gate: (() => Promise<boolean>) | null = null;
+let owner: (() => Promise<string | null>) | null = null;
+
+/** Who is signed in (set by offline/boot.ts). Items are stamped with it and only synced/listed for them. */
+export function setQueueOwner(fn: () => Promise<string | null>): void {
+  owner = fn;
+}
 
 /** Sync waits while this returns false (set by offline/boot.ts: "is a user signed in?"). */
 export function setSyncGate(fn: () => Promise<boolean>): void {
@@ -36,6 +42,7 @@ function q(): QueueCore {
     core = new QueueCore(queueStore(), {
       isOnline: () => typeof navigator === "undefined" || navigator.onLine !== false,
       canSync: async () => (gate ? gate() : true),
+      owner: async () => (owner ? owner() : null),
       reviewCode: (err) => (err instanceof NeedsReviewError ? err.code || "needs_review" : null),
     });
   }
@@ -98,6 +105,16 @@ export function linkSession(clientSessionId: string, sessionId: string): Promise
 /** Server session id for a clientSessionId once its offline session has synced, else null. */
 export function linkedSessionId(clientSessionId: string): Promise<string | null> {
   return q().linkedSessionId(clientSessionId);
+}
+
+/** Every item on this device, including other users' (logout warning). */
+export function allItems(): Promise<QueueItem[]> {
+  return q().allItems();
+}
+
+/** Logout: removes the signed-in user's items and cached children (see QueueCore.clearMine). */
+export function clearMyQueue(): Promise<number> {
+  return q().clearMine();
 }
 
 /** Removes all queue items, blobs and cached offline data from this device. */

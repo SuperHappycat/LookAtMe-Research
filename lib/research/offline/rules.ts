@@ -13,6 +13,8 @@ export interface CachedChild {
   code: string;
   birth_month: string | null;
   consent: { allow_recording: boolean; allow_research: boolean };
+  /** User who cached it: only that user can see or screen it offline on a shared device. */
+  ownerId?: string;
   /** Blind mode at caching time (optional third argument of cacheChildForOffline). */
   blind?: boolean;
   cachedAt: string;

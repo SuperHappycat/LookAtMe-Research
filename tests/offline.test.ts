@@ -197,6 +197,7 @@ before(async () => {
 });
 
 test("mark_session_offline: sets flags once, backdates start only within 30 days, staff/admin of the org only", async () => {
+  await t.rows("update public.consents set signed_at = now() - interval '2 days' where child_id = $1", [ID.childA]);
   const [{ start_session: sid }] = (await t.as(ID.staffA, () =>
     t.rows("select public.start_session($1, $2, 'opencv')", [ID.childA, CS1]),
   )) as { start_session: string }[];
@@ -221,4 +222,18 @@ test("mark_session_offline: sets flags once, backdates start only within 30 days
   const [r2] = await t.rows("select offline_synced_at, started_at from public.sessions where id = $1", [sid]);
   assert.equal(String(r2.offline_synced_at), String(r1.offline_synced_at));
   assert.equal(new Date(r2.started_at as string).toISOString(), earlier);
+});
+
+test("mark_session_offline: the start time is never moved before the consent was signed", async () => {
+  await t.rows("update public.consents set signed_at = now() - interval '10 minutes' where child_id = $1", [ID.childA]);
+  const cs = "c5000000-0000-4000-8000-000000000099";
+  const [{ start_session: sid }] = (await t.as(ID.staffA, () =>
+    t.rows("select public.start_session($1, $2, 'opencv')", [ID.childA, cs]),
+  )) as { start_session: string }[];
+  const [b] = await t.rows("select started_at from public.sessions where id = $1", [sid]);
+  const hourEarlier = new Date(new Date(b.started_at as string).getTime() - 3600_000).toISOString();
+  await t.as(ID.staffA, () => t.rows("select public.mark_session_offline($1, $2)", [sid, hourEarlier]));
+  const [a] = await t.rows("select created_offline, started_at from public.sessions where id = $1", [sid]);
+  assert.equal(a.created_offline, true);
+  assert.equal(String(a.started_at), String(b.started_at));
 });

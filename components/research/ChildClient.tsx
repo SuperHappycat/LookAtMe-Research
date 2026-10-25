@@ -69,7 +69,7 @@ function WithdrawPanel({ child, onDone }: { child: Child; onDone: (s: WithdrawSu
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent, force = false) {
     e.preventDefault();
     if (typed.trim() !== child.code) return;
     setBusy(true);
@@ -77,9 +77,18 @@ function WithdrawPanel({ child, onDone }: { child: Child; onDone: (s: WithdrawSu
     try {
       const r = await apiFetch("/api/research/withdraw-consent", {
         method: "POST",
-        body: JSON.stringify({ childId: child.id, reason, confirmCode: typed.trim() }),
+        body: JSON.stringify({ childId: child.id, reason, confirmCode: typed.trim(), force }),
       });
       const d = await r.json().catch(() => ({}));
+      if (r.status === 409 && d.code === "drive_delete_failed" && !force) {
+        const ok = window.confirm(
+          `${d.error}\n\nลบข้อมูลเด็กต่อเลยหรือไม่? คุณจะต้องลบไฟล์ใน Google Drive เอง (รหัสไฟล์: ${(d.driveFailed ?? []).join(", ")})\nDelete the child's data anyway? You will need to delete these Drive files by hand.`,
+        );
+        setBusy(false);
+        if (ok) await submit(e, true);
+        else setError(d.error);
+        return;
+      }
       if (!r.ok) throw new Error(d.error ?? `HTTP ${r.status}`);
       onDone(d as WithdrawSummary);
     } catch (err) {

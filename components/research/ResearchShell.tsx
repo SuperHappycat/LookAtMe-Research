@@ -16,7 +16,7 @@ import styles from "@/styles/shared.module.css";
 import rs from "@/styles/research.module.css";
 import { apiFetch, getSupabase, supabaseConfigured } from "@/lib/research/supabase/client";
 import { PLANS, ROLE_LABELS, planHas, type MemberRole, type PlanKey } from "@/lib/research/plans";
-import { cachePlanStatus } from "@/lib/research/offline/start";
+import { cachePlanStatus, pruneCachedChildren } from "@/lib/research/offline/start";
 import SyncStatusChip from "./offline/SyncStatusChip";
 
 export interface Organization {
@@ -135,6 +135,7 @@ export default function ResearchShell({ children }: { children: React.ReactNode 
       writeJson(cacheKey, list);
       // Spec §5.4: cache each org's plan status at login, for offline screening limits.
       list.forEach((m) => void cachePlanStatus(m.org));
+      void pruneCachedChildren();
     }
     setMemberships(list);
     let stored: string | null = null;

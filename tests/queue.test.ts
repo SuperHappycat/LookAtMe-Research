@@ -256,3 +256,44 @@ test("canSync=false (nobody signed in) waits without counting an attempt", async
   await q.syncNow();
   assert.equal(calls, 1);
 });
+
+test("items belong to the user who queued them: another sign-in neither lists nor syncs them", async () => {
+  let me: string | null = "user-a";
+  const store = new MemoryQueueStore();
+  const q = new QueueCore(store, { owner: async () => me });
+  const synced: string[] = [];
+  q.registerUploader("offline_session", async (item) => {
+    synced.push(`${item.id}@${me}`);
+  });
+  await q.enqueue(session("s1", "c1"));
+  assert.equal((await q.pending())[0].ownerId, "user-a");
+  me = "user-b";
+  assert.equal((await q.pending()).length, 0);
+  assert.equal((await q.counts()).offlineSessions, 0);
+  await q.syncNow();
+  assert.deepEqual(synced, []);
+  // B logs out: A's unsent item stays on the device.
+  assert.equal(await q.clearMine(), 0);
+  assert.equal((await store.all()).length, 1);
+  me = "user-a";
+  await q.syncNow();
+  assert.deepEqual(synced, ["s1@user-a"]);
+});
+
+test("logout clears only the user's own items and cached children", async () => {
+  let me: string | null = "user-a";
+  const store = new MemoryQueueStore();
+  const q = new QueueCore(store, { owner: async () => me });
+  await q.enqueue(session("a1", "c1"));
+  await store.setMeta("child:k1", { id: "k1", ownerId: "user-a" });
+  me = "user-b";
+  await q.enqueue(session("b1", "c2"));
+  await store.setMeta("child:k2", { id: "k2", ownerId: "user-b" });
+  assert.equal(await q.clearMine(), 1);
+  assert.deepEqual((await store.all()).map((r) => r.id), ["a1"]);
+  assert.deepEqual((await store.metaEntries("child:")).map((e) => e.key), ["child:k1"]);
+  me = "user-a";
+  assert.equal(await q.clearMine(), 1);
+  assert.equal((await store.all()).length, 0);
+  assert.equal((await store.metaEntries("child:")).length, 0);
+});

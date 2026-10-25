@@ -49,6 +49,11 @@ export interface QueueOptions {
   isOnline?: () => boolean;
   /** Checked once per pass (e.g. "is someone signed in?"); false → wait without counting an attempt. */
   canSync?: () => Promise<boolean>;
+  /**
+   * The signed-in user id (null = nobody). New items are stamped with it; pending()/counts() and sync
+   * only see items whose ownerId matches (items without ownerId are visible to everyone).
+   */
+  owner?: () => Promise<string | null>;
   /** Returns the review code when err is a NeedsReviewError (injected: contracts.ts is browser-side). */
   reviewCode?: (err: unknown) => string | null;
   backoffBaseMs?: number;
@@ -58,6 +63,8 @@ export interface QueueOptions {
 
 const KIND_ORDER: Record<QueueItemKind, number> = { offline_session: 0, recording: 1 };
 export const SESSION_LINK_PREFIX = "session:";
+/** Meta key prefix of cached children (offline/start.ts). */
+export const CHILD_META_PREFIX = "child:";
 
 /** Delay before the next try after `attempts` failures: base · 2^(attempts−1), capped. */
 export function backoffDelay(
@@ -151,7 +158,8 @@ export class QueueCore {
   async enqueue(item: QueueItem, blob: Blob | null = null): Promise<void> {
     if (blob && item.kind === "recording") await this.store.putBlob(item.blobKey, blob);
     const existing = await this.store.get(item.id);
-    let next: QueueItem = { ...item, attempts: existing?.item.attempts ?? item.attempts ?? 0 };
+    const ownerId = existing?.item.ownerId ?? item.ownerId ?? (this.opts.owner ? ((await this.opts.owner()) ?? undefined) : undefined);
+    let next: QueueItem = { ...item, attempts: existing?.item.attempts ?? item.attempts ?? 0, ...(ownerId ? { ownerId } : {}) };
     if (next.kind === "recording" && !next.sessionId) {
       const linked = await this.store.getMeta<string>(SESSION_LINK_PREFIX + next.clientSessionId);
       if (linked) next = { ...next, sessionId: linked };
@@ -165,7 +173,20 @@ export class QueueCore {
     return this.now() * 1000 + (this.seq % 1000);
   }
 
+  /** Records visible to the signed-in user (see QueueOptions.owner). */
+  private async mine(): Promise<QueueRecord[]> {
+    const all = await this.store.all();
+    if (!this.opts.owner) return all;
+    const me = await this.opts.owner();
+    return all.filter((r) => !r.item.ownerId || r.item.ownerId === me);
+  }
+
   async pending(): Promise<QueueItem[]> {
+    return sortRecords(await this.mine()).map((r) => r.item);
+  }
+
+  /** Every item on the device, whoever owns it (for the logout warning and clearing). */
+  async allItems(): Promise<QueueItem[]> {
     return sortRecords(await this.store.all()).map((r) => r.item);
   }
 
@@ -215,6 +236,29 @@ export class QueueCore {
     this.notify();
   }
 
+  /**
+   * Logout: removes the signed-in user's items and cached children. Other users' unsent items on a
+   * shared device stay; when none remain, everything (including cached plan status) is wiped.
+   * Returns how many of this user's items were deleted.
+   */
+  async clearMine(): Promise<number> {
+    const mine = await this.mine();
+    for (const rec of mine) {
+      await this.store.remove(rec.id);
+      if (rec.item.kind === "recording") await this.store.removeBlob(rec.item.blobKey);
+    }
+    if ((await this.store.all()).length === 0) {
+      await this.store.clear();
+    } else {
+      const me = this.opts.owner ? await this.opts.owner() : null;
+      for (const { key, value } of await this.store.metaEntries<{ ownerId?: string }>(CHILD_META_PREFIX)) {
+        if (!value?.ownerId || value.ownerId === me) await this.store.removeMeta(key);
+      }
+    }
+    this.notify();
+    return mine.length;
+  }
+
   /** Runs one sync pass (or joins the running one and repeats it once afterwards). */
   syncNow(): Promise<void> {
     if (this.running) {
@@ -237,7 +281,7 @@ export class QueueCore {
   private async pass(): Promise<void> {
     if (!this.isOnline()) return;
     if (this.opts.canSync && !(await this.opts.canSync())) return;
-    for (const rec of sortRecords(await this.store.all())) {
+    for (const rec of sortRecords(await this.mine())) {
       if (!this.isOnline()) return;
       let item = rec.item;
       if (item.needsReview || rec.nextAttemptAt > this.now()) continue;

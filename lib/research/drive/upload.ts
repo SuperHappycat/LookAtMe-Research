@@ -6,6 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { DRIVE_ERR, driveFileName, isDriveUploadUrl, MAX_RECORDING_BYTES, PROXY_CHUNK_BYTES, CHUNK_UNIT } from "./config";
 import {
+  deleteFile,
   ensureChildFolder,
   getFile,
   readChunkResponse,
@@ -66,6 +67,22 @@ export async function startUpload(
   }
 }
 
+async function existingRecording(
+  svc: SupabaseClient,
+  sessionId: string,
+  level: number,
+): Promise<{ location: string; drive_file_id: string | null } | null> {
+  const { data, error } = await svc
+    .from("session_files")
+    .select("location, drive_file_id")
+    .eq("session_id", sessionId)
+    .eq("kind", "recording")
+    .eq("level", level)
+    .maybeSingle();
+  if (error) throw new DriveFlowError(500, "db_error", error.message);
+  return (data as { location: string; drive_file_id: string | null } | null) ?? null;
+}
+
 export async function finishUpload(
   d: Deps,
   s: SessionRef,
@@ -82,6 +99,13 @@ export async function finishUpload(
   const why = verifyRecordingFile(meta, { sessionId: s.id, orgId: s.orgId, level: req.level, size: req.size });
   if (why) throw new DriveFlowError(422, "file_mismatch", `The Drive file does not belong to this session (${why}).`);
   const sizeBytes = meta.size !== undefined ? Number(meta.size) : (req.size ?? null);
+  const existing = await existingRecording(d.svc, s.id, req.level);
+  if (existing?.location === "google_drive" && existing.drive_file_id && existing.drive_file_id !== meta.id) {
+    // Never replace the id of a file already in Drive: the old file would be orphaned (and missed on withdrawal).
+    // The new copy is verified to be ours and unrecorded, so remove it rather than leave an orphan.
+    await deleteFile(d.f, token, meta.id).catch(() => undefined);
+    throw new DriveFlowError(409, "already_uploaded", "A recording for this level is already saved in Google Drive.");
+  }
   const { error } = await d.svc.from("session_files").upsert(
     {
       org_id: s.orgId,
@@ -101,6 +125,10 @@ export async function finishUpload(
 
 /** "Saved on this computer": records location='local_only' with no file id. */
 export async function recordLocalOnly(svc: SupabaseClient, s: SessionRef, level: number, size: number | null): Promise<void> {
+  const existing = await existingRecording(svc, s.id, level);
+  if (existing?.location === "google_drive") {
+    throw new DriveFlowError(409, "already_uploaded", "A recording for this level is already saved in Google Drive.");
+  }
   const { error } = await svc.from("session_files").upsert(
     { org_id: s.orgId, session_id: s.id, kind: "recording", level, location: "local_only", drive_file_id: null, path: null, size_bytes: size },
     { onConflict: "session_id,kind,level" },

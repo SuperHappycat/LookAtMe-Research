@@ -3,7 +3,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { deleteFile, type Fetch, type OAuthClient } from "./google";
+import { deleteFile, findFolder, type Fetch, type OAuthClient } from "./google";
 import { getAccessToken } from "./service";
 
 export async function deleteFilesWith(
@@ -32,4 +32,28 @@ export async function deleteFilesWith(
     }
   }
   return { deleted, failed };
+}
+
+/**
+ * Deletes the child's folder ("<root>/<child code>") if it exists. Never creates anything; never throws.
+ * True when the folder is gone (deleted or never existed), false when Drive is unreachable or not connected.
+ */
+export async function deleteChildFolderWith(
+  svc: SupabaseClient,
+  f: Fetch,
+  client: OAuthClient,
+  orgId: string,
+  childCode: string,
+): Promise<boolean> {
+  try {
+    const { data: org } = await svc.from("organizations").select("drive_folder_id").eq("id", orgId).maybeSingle();
+    const rootId = (org?.drive_folder_id as string | null | undefined) ?? null;
+    if (!rootId) return true; // nothing was ever uploaded for this organization
+    const token = await getAccessToken(svc, f, client, orgId);
+    const folderId = await findFolder(f, token, childCode, rootId);
+    if (!folderId) return true;
+    return await deleteFile(f, token, folderId);
+  } catch {
+    return false;
+  }
 }

@@ -113,6 +113,9 @@ async function mock(route) {
     await new Promise((res) => (tx.oncomplete = res));
   }, { child, org });
 
+  // the server has an active consent for the child (pruneCachedChildren() drops cached children without one)
+  state.consents.push({ id: 'k1', child_id: child.id, org_id: child.org_id, allow_recording: false, allow_research: true, signed_at: new Date().toISOString(), withdrawn_at: null });
+
   await page.goto(APP + '/r/offline');
   await page.waitForSelector('text=T-OFF');
   await step('e01-offline-page-online');

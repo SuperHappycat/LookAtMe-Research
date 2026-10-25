@@ -137,15 +137,25 @@ export function aggregateStudy(
 ): StudySummary {
   const allowed = new Set(sites.map((s) => s.orgId));
   const kept = rows.filter((r) => allowed.has(r.org_id));
+  const siteBlocks = sites.map((s) => ({
+    orgId: s.orgId,
+    ...aggregateBlock(
+      s.label,
+      kept.filter((r) => r.org_id === s.orgId),
+      opts,
+    ),
+  }));
+  // A suppressed site must not be recoverable by subtraction (total − other sites), so the total
+  // only includes sites whose own block is shown.
+  const shown = new Set(siteBlocks.filter((b) => !b.suppressed).map((b) => b.orgId));
   return {
-    sites: sites.map((s) => ({
-      orgId: s.orgId,
-      ...aggregateBlock(
-        s.label,
-        kept.filter((r) => r.org_id === s.orgId),
-        opts,
-      ),
-    })),
-    total: opts.includeTotal ? aggregateBlock("รวม / Total", kept, opts) : null,
+    sites: siteBlocks,
+    total: opts.includeTotal
+      ? aggregateBlock(
+          shown.size === siteBlocks.length ? "รวม / Total" : "รวม (เฉพาะสถานที่ที่แสดงผล) / Total (shown sites only)",
+          kept.filter((r) => shown.has(r.org_id)),
+          opts,
+        )
+      : null,
   };
 }

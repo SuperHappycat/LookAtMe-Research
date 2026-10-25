@@ -57,9 +57,35 @@ function fakeDeps(over: Partial<WithdrawDeps> = {}) {
   return { deps, calls, removed: () => removed, auditTarget: () => auditTarget };
 }
 
-test("withdrawal runs every step in order and reports Drive failures", async () => {
+test("a Drive delete failure stops before any row is deleted unless forced", async () => {
   const f = fakeDeps();
+  await assert.rejects(
+    withdrawConsent({ childId: CHILD, reason: "parent_request", confirmCode: "A-001" }, f.deps),
+    (e: WithdrawError) => e.status === 409 && JSON.stringify(e.driveFailed) === JSON.stringify(["drv1"]),
+  );
+  assert.deepEqual(f.calls, ["loadChild", "requireAdmin", "markWithdrawn", "drive"]);
+});
+
+test("Drive deleted → the child's Drive folder is removed too", async () => {
+  const folders: string[] = [];
+  const f = fakeDeps({
+    async deleteDriveFiles(_org: string, ids: string[]) {
+      return { deleted: ids.length, failed: [] };
+    },
+    async deleteChildFolder(_org: string, code: string) {
+      folders.push(code);
+      return true;
+    },
+  });
   const res = await withdrawConsent({ childId: CHILD, reason: "parent_request", confirmCode: "A-001" }, f.deps);
+  assert.deepEqual(folders, ["A-001"]);
+  assert.equal(res.driveFolderDeleted, true);
+  assert.deepEqual(res.driveFailed, []);
+});
+
+test("withdrawal (forced) runs every step in order and reports Drive failures", async () => {
+  const f = fakeDeps();
+  const res = await withdrawConsent({ childId: CHILD, reason: "parent_request", confirmCode: "A-001", force: true }, f.deps);
   assert.deepEqual(f.calls, ["loadChild", "requireAdmin", "markWithdrawn", "drive", "gaze", "deleteChild", "audit"]);
   assert.deepEqual(res.driveFailed, ["drv1"]);
   assert.equal(res.localOnlyRecordings, 1);
@@ -94,7 +120,7 @@ test("a gaze delete failure stops before the child row is deleted", async () => 
     },
   });
   await assert.rejects(
-    withdrawConsent({ childId: CHILD, reason: "other", confirmCode: "A-001" }, f.deps),
+    withdrawConsent({ childId: CHILD, reason: "other", confirmCode: "A-001", force: true }, f.deps),
     (e: WithdrawError) => e.status === 502,
   );
   assert.ok(!f.calls.includes("deleteChild"));

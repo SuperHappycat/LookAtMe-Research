@@ -19,6 +19,11 @@ interface QueueItemBase {
   lastError?: string;
   /** Set by the queue when an item needs a person (e.g. quota_reached, Drive needs reconnect). */
   needsReview?: boolean;
+  /**
+   * Supabase user id of the person who created the item (stamped by the queue). Only that user's
+   * sign-in syncs or lists it, so a shared device never uploads one person's screening as another.
+   */
+  ownerId?: string;
 }
 
 /** A screen recording waiting to be uploaded (produced by A, uploaded by A's uploader, stored by E). */

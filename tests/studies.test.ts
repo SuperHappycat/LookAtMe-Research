@@ -273,3 +273,17 @@ test("study RPCs are not callable by anon", async () => {
     await t.db.exec(`reset role`);
   }
 });
+
+test("study_sites: a site sees only its own row; the lead sees every site", async () => {
+  const all = await t.rows("select org_id from public.study_sites where study_id = $1", [study]);
+  assert.ok(all.length > 1, "needs at least one non-lead site");
+  const lead = await t.as(ID.adminB, () => t.rows("select org_id from public.study_sites where study_id = $1", [study]));
+  assert.equal(lead.length, (await t.rows("select 1 from public.study_sites where study_id = $1", [study])).length);
+  for (const r of all) {
+    if (r.org_id === ID.orgB) continue;
+    const orgId = r.org_id as string;
+    const [m] = await t.rows("select user_id from public.members where org_id = $1 limit 1", [orgId]);
+    const seen = await t.as(m.user_id as string, () => t.rows("select org_id from public.study_sites where study_id = $1", [study]));
+    assert.deepEqual(seen.map((x) => x.org_id), [orgId], "a site must not list the other sites");
+  }
+});

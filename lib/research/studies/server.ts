@@ -48,8 +48,10 @@ export function serviceStudyData(): StudyData {
       return (data?.role as MemberRole | undefined) ?? null;
     },
     async orgPlan(orgId) {
-      const { data } = await svc.from("organizations").select("plan").eq("id", orgId).maybeSingle();
-      return (data?.plan as PlanKey | undefined) ?? null;
+      // An expired plan counts as no plan (matches org_has_multi_site in the database).
+      const { data } = await svc.from("organizations").select("plan, expires_on").eq("id", orgId).maybeSingle();
+      if (!data || (data.expires_on as string) < new Date().toISOString().slice(0, 10)) return null;
+      return (data.plan as PlanKey | undefined) ?? null;
     },
     async orgNames(ids) {
       const m = new Map<string, string>();

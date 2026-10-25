@@ -12,7 +12,7 @@ import styles from "@/styles/shared.module.css";
 import rs from "@/styles/research.module.css";
 import type { QueueItem } from "@/lib/research/contracts";
 import { pending, onChange, removeItem, retryItem, syncNow } from "@/lib/research/queue";
-import { cachedChildren, cachedPlan, forgetCachedChild, startScreening } from "@/lib/research/offline/start";
+import { cachedChildren, cachedPlan, forgetCachedChild, pruneCachedChildren, startScreening } from "@/lib/research/offline/start";
 import { clearOfflineData } from "@/lib/research/offline/boot";
 import type { CachedChild, CachedPlan } from "@/lib/research/offline/rules";
 import { OFFLINE_CONFIG } from "@/lib/research/offline/config";
@@ -44,6 +44,7 @@ export default function OfflineClient() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    await pruneCachedChildren();
     const [p, k, pl] = await Promise.all([pending(), cachedChildren(orgId), orgId ? cachedPlan(orgId) : null]);
     setItems(p);
     setKids(k);

@@ -1,14 +1,14 @@
 /**
  * app/api/research/withdraw-consent/route.ts
  * ============================================
- * POST { childId, reason, confirmCode }   org admin of the child's organization (spec §5.3)
+ * POST { childId, reason, confirmCode, force? }   org admin of the child's organization (spec §5.3)
  *
  * Deletes the child's Drive recordings, gaze CSVs and all rows (children cascade), then writes the audit log
  * with the reason category only. Steps and failure handling: lib/research/followup/withdraw.ts.
  */
 
 import { audit, getServiceClient, handle, HttpError, requireOrgRole, requireUser } from "@/lib/research/supabase/server";
-import { deleteDriveFiles } from "@/lib/research/drive/server";
+import { deleteChildDriveFolder, deleteDriveFiles } from "@/lib/research/drive/server";
 import { withdrawConsent, WithdrawError, type WithdrawFile } from "@/lib/research/followup/withdraw";
 
 function check<T>(r: { data: T; error: { message: string } | null }): T {
@@ -49,6 +49,7 @@ export const POST = handle(async (req) => {
         );
       },
       deleteDriveFiles,
+      deleteChildFolder: deleteChildDriveFolder,
       async removeGaze(paths) {
         for (let i = 0; i < paths.length; i += 100) {
           const { error } = await svc.storage.from("gaze").remove(paths.slice(i, i + 100));
@@ -62,7 +63,10 @@ export const POST = handle(async (req) => {
     });
     return Response.json(summary);
   } catch (err) {
-    if (err instanceof WithdrawError) throw new HttpError(err.status, err.message);
+    if (err instanceof WithdrawError) {
+      if (err.driveFailed) return Response.json({ error: err.message, code: "drive_delete_failed", driveFailed: err.driveFailed }, { status: err.status });
+      throw new HttpError(err.status, err.message);
+    }
     throw err;
   }
 });

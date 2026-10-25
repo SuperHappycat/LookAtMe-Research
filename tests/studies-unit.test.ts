@@ -406,3 +406,16 @@ test("detail and list: a site sees only the lead and itself; invites (no codes) 
   assert.deepEqual(await listStudies(d, "outsider", OUTSIDER), []);
   await rejects(listStudies(d, "outsider", SITE), 403);
 });
+
+test("aggregateStudy: a suppressed site is left out of the total (no recovery by subtraction)", () => {
+  const rows = [row(), row(), row(), row({ org_id: SITE, overall_score: 99 })];
+  const s = aggregateStudy(rows, [{ orgId: LEAD, label: "Lead H" }, { orgId: SITE, label: "Site H" }], {
+    minCellN: 3,
+    hideBlindScores: false,
+    includeTotal: true,
+  });
+  assert.equal(s.sites.find((x) => x.orgId === SITE)!.suppressed, true);
+  assert.equal(s.total!.n, 3);
+  assert.equal(s.total!.overall!.mean, s.sites.find((x) => x.orgId === LEAD)!.overall!.mean);
+  assert.match(s.total!.label, /shown sites only/);
+});

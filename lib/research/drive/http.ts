@@ -48,12 +48,15 @@ export async function loadUploadSession(svc: SupabaseClient, userId: string, ses
   if (!UUID_RE.test(sessionId)) throw new HttpError(400, "Bad session id.");
   const { data: s, error } = await svc
     .from("sessions")
-    .select("id, org_id, child_id, started_at")
+    .select("id, org_id, child_id, staff_id, started_at")
     .eq("id", sessionId)
     .maybeSingle();
   if (error) throw new HttpError(500, error.message);
   if (!s) throw new HttpError(404, "Session not found.");
   await requireOrgRole(userId, s.org_id, ["admin", "staff"]);
+  // Staff may only add recordings to sessions they ran themselves (admins: any session of the org).
+  const { data: me } = await svc.from("members").select("role").eq("user_id", userId).eq("org_id", s.org_id).maybeSingle();
+  if (me?.role === "staff" && s.staff_id !== userId) throw new HttpError(403, "Only the person who ran this session (or an admin) can add its recording.");
 
   const { data: child } = await svc.from("children").select("id, code, org_id").eq("id", s.child_id).maybeSingle();
   if (!child || child.org_id !== s.org_id) throw new HttpError(404, "Child not found.");

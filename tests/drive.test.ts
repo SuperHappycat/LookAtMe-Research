@@ -300,6 +300,19 @@ test("finish-upload: verified file → session_files row (google_drive, level); 
   assert.equal(db.t("session_files").length, 1);
 });
 
+test("finish-upload / local_only never replace a recording already in Drive", async () => {
+  const db = connectedDb();
+  db.t("session_files").push({ org_id: ORG, session_id: SESSION, kind: "recording", level: 2, location: "google_drive", drive_file_id: "file_firstxxxxx" });
+  const meta = { id: "file_secondxxxx", size: "10", appProperties: { lookatme_session: SESSION, lookatme_org: ORG, lookatme_level: "2" } };
+  const { f } = scriptedFetch([
+    [isToken, () => json({ access_token: "AT" })],
+    [(c) => c.url.includes("/files/file_secondxxxx"), () => json(meta)],
+  ]);
+  await assert.rejects(up.finishUpload({ svc: db.client(), f, client }, sessionRef, { driveFileId: "file_secondxxxx", level: 2 }), (e: { status: number; code: string }) => e.status === 409 && e.code === "already_uploaded");
+  await assert.rejects(up.recordLocalOnly(db.client(), sessionRef, 2, 5), (e: { status: number }) => e.status === 409);
+  assert.equal(db.t("session_files")[0].drive_file_id, "file_firstxxxxx");
+});
+
 test("local_only recordings are recorded without a file id", async () => {
   const db = connectedDb();
   await up.recordLocalOnly(db.client(), sessionRef, 1, 1234);

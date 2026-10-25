@@ -5,7 +5,7 @@
 
 import "server-only";
 import { getServiceClient } from "../supabase/server";
-import { deleteFilesWith } from "./deleteFiles";
+import { deleteChildFolderWith, deleteFilesWith } from "./deleteFiles";
 import { oauthClientFromEnv } from "./google";
 
 /**
@@ -22,4 +22,15 @@ export async function deleteDriveFiles(orgId: string, fileIds: string[]): Promis
     return { deleted: 0, failed: [...fileIds] };
   }
   return deleteFilesWith(getServiceClient(), fetch, client, orgId, fileIds);
+}
+
+/** Deletes the child's Drive folder (and anything still inside it). Never throws. */
+export async function deleteChildDriveFolder(orgId: string, childCode: string): Promise<boolean> {
+  let client;
+  try {
+    client = oauthClientFromEnv();
+  } catch {
+    return false;
+  }
+  return deleteChildFolderWith(getServiceClient(), fetch, client, orgId, childCode);
 }

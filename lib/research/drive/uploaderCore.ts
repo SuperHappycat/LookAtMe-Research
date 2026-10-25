@@ -64,7 +64,7 @@ async function apiJson(d: UploaderDeps, path: string, body: unknown): Promise<Re
   const code = typeof j.code === "string" ? j.code : "";
   if (REVIEW_CODES.has(code)) throw new d.NeedsReview(code, REVIEW_MESSAGES[code] ?? String(j.error ?? code));
   if (res.status === 401) throw new RetryLaterError("not_logged_in");
-  if (res.status === 403 || res.status === 404 || res.status === 422 || res.status === 400) {
+  if (res.status === 403 || res.status === 404 || res.status === 409 || res.status === 422 || res.status === 400) {
     throw new d.NeedsReview(code || `http_${res.status}`, String(j.error ?? `HTTP ${res.status}`));
   }
   throw new RetryLaterError(String(j.error ?? `HTTP ${res.status}`));

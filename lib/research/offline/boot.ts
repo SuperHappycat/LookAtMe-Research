@@ -9,7 +9,7 @@
  */
 
 import { getSupabase, supabaseConfigured } from "../supabase/client";
-import { clearQueue, linkSession, pending, registerUploader, setSyncGate, startSyncLoop, syncNow } from "../queue";
+import { clearMyQueue, linkSession, registerUploader, setQueueOwner, setSyncGate, startSyncLoop, syncNow } from "../queue";
 import { makeSessionUploader } from "./syncSession";
 
 let booted = false;
@@ -26,6 +26,13 @@ export function bootOffline(): void {
     }
   };
   setSyncGate(signedIn);
+  setQueueOwner(async () => {
+    try {
+      return (await sb.auth.getSession()).data.session?.user.id ?? null;
+    } catch {
+      return null;
+    }
+  });
   // Sync as soon as someone signs in (e.g. after logging in again online).
   sb.auth.onAuthStateChange((event) => {
     if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") void syncNow();
@@ -54,17 +61,15 @@ export function bootOffline(): void {
 }
 
 /**
- * Wipes every offline record on this device: waiting uploads, recordings, cached children and
- * plan status. Returns how many queue items were deleted (unsent data is lost — callers should
- * warn first when it's > 0). Call on logout.
+ * Logout: wipes this user's offline records (waiting uploads, recordings, cached children). Other
+ * users' unsent items on a shared device are kept. Returns how many items were deleted (unsent data
+ * is lost — callers should warn first when pending() is non-empty).
  */
 export async function clearOfflineData(): Promise<number> {
-  let n = 0;
   try {
-    n = (await pending()).length;
-    await clearQueue();
+    return await clearMyQueue();
   } catch (err) {
     console.warn("[offline] clear failed", err);
+    return 0;
   }
-  return n;
 }
