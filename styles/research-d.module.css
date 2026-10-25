@@ -1,0 +1,180 @@
+/* Multi-site studies (agent D). Uses the shared tokens from app/globals.css. */
+
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.titleRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.badgeLead {
+  background: var(--primary-soft);
+  color: var(--primary-hover);
+}
+
+.badgeSite {
+  background: #e0f2f1;
+  color: var(--secondary-hover);
+}
+
+.codeBox {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: clamp(17px, 5vw, 26px);
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  overflow-x: auto;
+  font-weight: 700;
+  padding: 12px 16px;
+  border: 2px dashed var(--primary);
+  border-radius: 12px;
+  background: var(--surface-sunken);
+  text-align: center;
+  user-select: all;
+}
+
+.codeInput {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.note {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.notice {
+  font-size: 13px;
+  line-height: 1.55;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.notice ul {
+  margin: 6px 0 0 18px;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right !important;
+  white-space: nowrap;
+}
+
+.totalRow td {
+  font-weight: 700;
+  border-top: 2px solid var(--border-strong);
+}
+
+.chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.chartLabel {
+  font-size: 12px;
+  fill: var(--foreground);
+}
+
+.chartMuted {
+  font-size: 11px;
+  fill: var(--muted);
+}
+
+.legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-right: 5px;
+  vertical-align: -1px;
+}
+
+.toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 10px 0;
+}
+
+.smallButton {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.smallButton:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.smallButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dangerLink {
+  background: none;
+  border: none;
+  color: var(--danger);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.toggle {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 14px;
+}
+
+.toggle input {
+  margin-top: 4px;
+}
+
+.listLink {
+  color: var(--foreground);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.listLink:hover {
+  color: var(--primary);
+}
+
+.spaced {
+  margin-bottom: 16px;
+}
