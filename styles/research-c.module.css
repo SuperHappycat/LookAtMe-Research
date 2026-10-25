@@ -82,6 +82,8 @@
   display: block;
   width: 100%;
   height: auto;
+  /* All stimulus clips are 16:9; reserving the box lets boxes be drawn before the video has loaded. */
+  aspect-ratio: 16 / 9;
 }
 
 .overlay {
@@ -236,6 +238,7 @@
 
 .chart {
   width: 100%;
+  max-width: 760px;
   height: auto;
   display: block;
   font-family: var(--font-text);
