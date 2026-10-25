@@ -17,7 +17,9 @@ import { friendlyError, getSupabase, supabaseConfigured } from "@/lib/research/s
 import { endResearchScreening, getResearchContext, type ResearchContext } from "@/lib/research/screening";
 import { getGazeLog, gazeRowsToCsv } from "@/lib/research/gazeLog";
 import { computeQuality, QUALITY_CONFIG, REASON_TEXT, type QualityResult } from "@/lib/research/quality";
-import { getCalibrationState } from "@/lib/research/gaze/calibrationStore";
+import { getActiveModel, getCalibrationState } from "@/lib/research/gaze/calibrationStore";
+import { RESEARCH_CONFIG } from "@/lib/research/config";
+import EndCheck, { type EndCheckResult } from "./EndCheck";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -36,9 +38,13 @@ export default function ResearchSaveCard({
   const [error, setError] = useState<string | null>(null);
   const started = useRef(false);
   const complete = !!(session.test1 && session.test2 && session.test3);
+  // MediaPipe sessions get a short end-of-session accuracy check before saving.
+  const [needsEndCheck] = useState(() => !!ctx && ctx.engine === "mediapipe" && getActiveModel() !== null);
+  const [endCheck, setEndCheck] = useState<EndCheckResult | null>(null);
+  const ready = complete && (!needsEndCheck || endCheck !== null);
 
   const save = useCallback(async () => {
-    if (!ctx || !complete) return;
+    if (!ctx || !ready) return;
     setState("saving");
     setError(null);
     try {
@@ -53,6 +59,8 @@ export default function ResearchSaveCard({
           ctx.engine === "mediapipe" && calRec
             ? { meanErrorPx: calRec.meanErrorPx, ok: calRec.ok, lowAccuracy: calRec.lowAccuracy }
             : null,
+        endCheckDeg: endCheck && !endCheck.skipped ? endCheck.meanErrorDeg : null,
+        maxEndCheckDeg: RESEARCH_CONFIG.maxEndCheckErrorDeg,
       });
       setQuality(q);
 
@@ -82,6 +90,17 @@ export default function ResearchSaveCard({
           test2: session.test2,
           test3: session.test3,
           cameraCheck: ctx.cameraCheck ?? null,
+          calibration: calRec
+            ? {
+                meanErrorPx: Number.isFinite(calRec.meanErrorPx) ? calRec.meanErrorPx : null,
+                meanErrorDeg: calRec.meanErrorDeg ?? null,
+                grade: calRec.grade ?? null,
+                mode: calRec.mode ?? null,
+                pointsUsed: calRec.pointsUsed ?? null,
+                attempts: calRec.attempts,
+              }
+            : null,
+          endCheck,
           levels: log.levels,
           samples: log.rows.length,
         },
@@ -95,13 +114,13 @@ export default function ResearchSaveCard({
       setError(friendlyError(err));
       setState("error");
     }
-  }, [ctx, complete, result, session]);
+  }, [ctx, ready, result, session, endCheck]);
 
   useEffect(() => {
-    if (started.current || !ctx || !complete || !supabaseConfigured()) return;
+    if (started.current || !ctx || !ready || !supabaseConfigured()) return;
     started.current = true;
     void save();
-  }, [ctx, complete, save]);
+  }, [ctx, ready, save]);
 
   if (!ctx) {
     return (
@@ -122,6 +141,12 @@ export default function ResearchSaveCard({
       {!complete && (
         <p className={styles.errorText}>
           ยังทำแบบทดสอบไม่ครบ 3 ระดับ จึงยังไม่บันทึก / Not all three tests are done, so nothing is saved yet.
+        </p>
+      )}
+      {complete && needsEndCheck && endCheck === null && <EndCheck onDone={setEndCheck} />}
+      {endCheck && !endCheck.skipped && endCheck.meanErrorDeg !== null && (
+        <p className={rs.muted}>
+          ตรวจท้ายสุด / Final check: ≈ {endCheck.meanErrorDeg.toFixed(1)}° ({Math.round(endCheck.meanErrorPx ?? 0)} px)
         </p>
       )}
       {state === "saving" && <p>กำลังบันทึก… / Saving…</p>}

@@ -26,6 +26,10 @@ export interface QualityInput {
   /** Face scale per frame where a face was found (MediaPipe only). */
   faceScale: number[];
   calibration: { meanErrorPx: number; ok: boolean; lowAccuracy: boolean } | null;
+  /** Approximate degrees of error at the end-of-session check (null if not done). */
+  endCheckDeg?: number | null;
+  /** Threshold for endCheckDeg (from RESEARCH_CONFIG.maxEndCheckErrorDeg). */
+  maxEndCheckDeg?: number;
 }
 
 export interface QualityResult {
@@ -70,6 +74,14 @@ export function computeQuality(input: QualityInput): QualityResult {
   if (input.faceFound.length === 0) reasons.push("no_samples");
   else if (faceFoundPct < QUALITY_CONFIG.minFaceFoundPct) reasons.push("face_not_found_often");
   if (input.calibration && !input.calibration.ok) reasons.push("calibration_failed");
+  if (
+    input.endCheckDeg !== undefined &&
+    input.endCheckDeg !== null &&
+    input.maxEndCheckDeg !== undefined &&
+    !(input.endCheckDeg <= input.maxEndCheckDeg)
+  ) {
+    reasons.push("drift_after_tests");
+  }
 
   return {
     faceFoundPct: round1(faceFoundPct),
@@ -85,4 +97,6 @@ export const REASON_TEXT: Record<string, string> = {
   no_samples: "ไม่มีข้อมูลการมอง / No gaze data was recorded",
   face_not_found_often: "กล้องมองไม่เห็นใบหน้าบ่อยเกินไป / The face was often not visible",
   calibration_failed: "การปรับเทียบไม่ผ่าน (ความแม่นยำต่ำ) / Calibration did not pass (low accuracy)",
+  drift_after_tests:
+    "ตรวจท้ายสุดพบว่าความแม่นยำลดลง (เด็กอาจขยับ) / Accuracy dropped by the end (the child may have moved)",
 };

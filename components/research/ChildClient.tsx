@@ -131,6 +131,7 @@ export default function ChildClient() {
         clientSessionId,
         engine,
         startedAt: new Date().toISOString(),
+        ageMonths: ageInMonths(child.birth_month),
       },
       child.birth_month,
     );
