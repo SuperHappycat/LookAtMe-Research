@@ -50,6 +50,11 @@ export default function OfflineClient() {
     setPlan(pl);
   }, [orgId]);
 
+  // Keep the camera-check route ready so "start offline" can navigate without the network.
+  useEffect(() => {
+    router.prefetch("/r/check");
+  }, [router]);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- IndexedDB load; state is set after it resolves
     void load();
