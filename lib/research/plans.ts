@@ -27,7 +27,8 @@ export type PlanFeature =
   | "group_summary"
   | "multi_site"
   | "custom_videos"
-  | "raw_export";
+  | "raw_export"
+  | "age_comparison";
 
 export const PLANS: Record<PlanKey, PlanInfo> = {
   school: {
@@ -36,7 +37,7 @@ export const PLANS: Record<PlanKey, PlanInfo> = {
     priceThbPerYear: 1900,
     screeningQuota: 300,
     seats: 3,
-    features: new Set<PlanFeature>(["class_list_import", "parent_letter"]),
+    features: new Set<PlanFeature>(["class_list_import", "parent_letter", "age_comparison"]),
   },
   behavioral_dev: {
     labelTh: "ศูนย์พัฒนาการ",
@@ -44,7 +45,7 @@ export const PLANS: Record<PlanKey, PlanInfo> = {
     priceThbPerYear: 2900,
     screeningQuota: 1000,
     seats: 5,
-    features: new Set<PlanFeature>(["repeat_trend", "clinic_logo"]),
+    features: new Set<PlanFeature>(["repeat_trend", "clinic_logo", "age_comparison"]),
   },
   hospital: {
     labelTh: "โรงพยาบาล",
@@ -61,6 +62,7 @@ export const PLANS: Record<PlanKey, PlanInfo> = {
       "multi_site",
       "custom_videos",
       "raw_export",
+      "age_comparison",
     ]),
   },
 };

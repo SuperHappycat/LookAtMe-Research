@@ -15,7 +15,7 @@ import type { Session } from "@supabase/supabase-js";
 import styles from "@/styles/shared.module.css";
 import rs from "@/styles/research.module.css";
 import { apiFetch, getSupabase, supabaseConfigured } from "@/lib/research/supabase/client";
-import { PLANS, ROLE_LABELS, type MemberRole, type PlanKey } from "@/lib/research/plans";
+import { PLANS, ROLE_LABELS, planHas, type MemberRole, type PlanKey } from "@/lib/research/plans";
 
 export interface Organization {
   id: string;
@@ -151,10 +151,16 @@ export default function ResearchShell({ children }: { children: React.ReactNode 
     router.replace("/login");
   };
 
+  // Phase 4+5 entries are fixed here in Wave 0; agents own the pages, not this list.
+  const plan = active?.org.plan;
   const nav = [
     { href: "/r", label: "เด็ก / Children" },
     { href: "/r/dashboard", label: "ผลการคัดกรอง / Results" },
+    { href: "/r/analysis", label: "วิเคราะห์ / Analysis" },
+    ...(plan && planHas(plan, "diagnosis_follow_up") ? [{ href: "/r/stats", label: "ความแม่นยำ / Accuracy" }] : []),
+    ...(plan && planHas(plan, "multi_site") ? [{ href: "/r/studies", label: "โครงการวิจัย / Studies" }] : []),
     ...(active?.role === "admin" ? [{ href: "/r/team", label: "ทีม / Team" }] : []),
+    ...(active?.role === "admin" ? [{ href: "/r/settings", label: "ตั้งค่า / Settings" }] : []),
     ...(isPlatformAdmin ? [{ href: "/r/admin", label: "LookAtMe admin" }] : []),
   ];
 
