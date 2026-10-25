@@ -169,7 +169,8 @@ export default function StatsClient() {
     void load();
     if (logged.current !== orgId) {
       logged.current = orgId;
-      void getSupabase().rpc("log_action", { p_org: orgId, p_action: "view_stats", p_target: "stats" });
+      // supabase-js builders run only when awaited / then-ed
+      void getSupabase().rpc("log_action", { p_org: orgId, p_action: "view_stats", p_target: "stats" }).then(() => undefined);
     }
   }, [isAdmin, hasFeature, orgId, load]);
 
