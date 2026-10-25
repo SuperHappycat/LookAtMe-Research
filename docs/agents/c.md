@@ -63,7 +63,7 @@ No migration: the `aoi_sets` table and its RLS from Wave 0 were enough (its RLS 
 
 ## Tested
 
-- `npm test`: 58 tests pass. 20 of them are new: AOI metrics on synthetic gaze rows (% inside, dwell, time to first
+- `npm test`: 57 tests pass. 20 of them are new: AOI metrics on synthetic gaze rows (% inside, dwell, time to first
   look, visits, invalid samples, gap splitting, time windows, other levels ignored, level-1 humanSide mapping,
   skipped sessions, summary), stats against R reference values, bands and filters, age comparison and percentile,
   group summary, wide/long/codebook/R exports (column counts, coded IDs only, no child UUID), and the gaze downloader
