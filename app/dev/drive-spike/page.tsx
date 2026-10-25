@@ -9,6 +9,6 @@ export const metadata = {
 export default async function DriveSpikePage() {
   // Decide at request time (not build time) whether dev tools are enabled.
   await connection();
-  if (process.env.ENABLE_DEV_TOOLS !== "1") notFound();
+  if (process.env.ENABLE_DEV_TOOLS !== "1" || process.env.NODE_ENV === "production") notFound();
   return <DriveSpikeClient />;
 }
