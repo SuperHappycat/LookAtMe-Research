@@ -70,3 +70,18 @@ begin
   return new;
 end $$;
 create trigger aoi_keep_org before update on public.aoi_sets for each row execute function public.aoi_keep_org();
+
+-- ---------------------------------------------------------------- audit actions used by Phase 4+5 pages
+create or replace function public.log_action(p_org uuid, p_action text, p_target text default null)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_member(p_org) then raise exception 'not_allowed'; end if;
+  if p_action not in (
+    'view_session', 'export_sessions_csv', 'export_gaze_csv',
+    'view_stats', 'export_stats_csv', 'export_analysis_csv',
+    'view_study_summary', 'export_study_csv'
+  ) then
+    raise exception 'bad_action';
+  end if;
+  insert into public.audit_log (org_id, user_id, action, target) values (p_org, auth.uid(), left(p_action, 60), left(p_target, 200));
+end $$;
