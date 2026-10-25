@@ -15,7 +15,7 @@ import { useRouter } from "next/navigation";
 import styles from "@/styles/shared.module.css";
 import { MONTH_NAMES, THAI_PROVINCES, daysInMonth } from "@/lib/provinces";
 import { startNewSession } from "@/lib/sessionState";
-import { preloadGazeWorker } from "@/lib/gazeWorkerClient";
+import { getGazeEngine } from "@/lib/research/gaze";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -23,7 +23,7 @@ export default function IntakeClient() {
   // Start loading OpenCV.js in the background while the form is filled
   // in, so Test 1 is usually ready the moment it opens.
   useEffect(() => {
-    preloadGazeWorker();
+    getGazeEngine().preload();
   }, []);
 
   const router = useRouter();
@@ -70,7 +70,8 @@ export default function IntakeClient() {
       .toString()
       .padStart(2, "0")}`;
     startNewSession({ name: trimmedName, email: trimmedEmail, dateOfBirth: iso, province });
-    router.push("/test1");
+    // Research app: engines that need calibration go through /calibrate first.
+    router.push(getGazeEngine().requiresCalibration ? "/calibrate" : "/test1");
   }
 
   return (
