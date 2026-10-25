@@ -3,7 +3,8 @@
 Full browser-based port of the LookAtMe desktop eye-tracking screening
 app (the original `d:\LookAtMe` Python/Tkinter project). Same flow as
 the desktop app: Home → Patient Intake → Test 1 → Test 2 → Test 3 →
-Summary, plus a Previous Results page.
+Summary. (The desktop app's Previous Results page is not ported -- see
+below.)
 
 ## Why this looks different from the desktop app
 
@@ -29,9 +30,12 @@ Summary, plus a Previous Results page.
   controller.
 - **Google Sheets instead of SQLite + PDF reports.** The finished
   Summary appends one row (patient + all three tests' results +
-  overall score/risk) to a Google Sheet via `/api/save-result`, and
-  Previous Results reads them back via `/api/list-results` -- both use
+  overall score/risk) to a Google Sheet via `/api/save-result`, using
   a Google Cloud service account, never exposed to the browser.
+- **No Previous Results page.** Saved rows contain patient names and
+  emails, and this app has no login, so there is deliberately no
+  endpoint that reads them back. View results in the Google Sheet
+  itself, which only people it's shared with can open.
 
 ## Project structure
 
@@ -41,12 +45,10 @@ app/
   intake/page.tsx              Patient intake (name/email/DOB/province)
   test1/, test2/, test3/       The three tests
   summary/page.tsx              Overall score + risk + save
-  results/page.tsx               Previous Results (reads Google Sheets)
   api/save-result/route.ts      POST: append a session row to Sheets
-  api/list-results/route.ts     GET: read session rows back
 components/
   HomeClient.tsx, IntakeClient.tsx, Test1/2/3Client.tsx,
-  SummaryClient.tsx, ResultsClient.tsx
+  SummaryClient.tsx
 hooks/
   useGazeTestRunner.ts          Shared webcam/worker/timer machinery
                                  behind all 3 tests (the browser
@@ -84,10 +86,9 @@ OpenCV.js (~10MB) -- a one-time cost per tab per page (Next.js doesn't
 share the worker across routes since each is a fresh client component
 mount).
 
-Saving/reading results requires the Google Sheets env vars below;
-without them the app still runs every test fine, "Save to Google
-Sheet" and Previous Results will just show a clear error explaining
-it isn't configured yet.
+Saving results requires the Google Sheets env vars below; without
+them the app still runs every test fine, "Save to Google Sheet" will
+just show a clear error explaining it isn't configured yet.
 
 ## Google Sheets setup
 

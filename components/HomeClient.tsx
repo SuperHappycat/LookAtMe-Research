@@ -3,10 +3,11 @@
 /**
  * components/HomeClient.tsx
  * ============================
- * Web port of gui/home.py: logo, disclaimer subtitle, and the two nav
- * actions that make sense for a stateless web deployment (Start
- * Screening -> Intake, Previous Results -> the Google-Sheets-backed
- * results list). The desktop app's camera-status card and
+ * Web port of gui/home.py: logo, disclaimer subtitle, and the Start
+ * Screening nav action. The desktop app's Previous Results page isn't
+ * ported: saved results hold patient names/emails, and this app has no
+ * login, so they're only viewable in the (access-controlled) Google
+ * Sheet itself. The desktop app's camera-status card and
  * Settings/Exit buttons aren't ported -- camera access is checked when
  * a test actually starts, and there's no local app to "exit" or a
  * Settings page in this pass.
@@ -29,9 +30,6 @@ export default function HomeClient() {
       <div className={styles.navRow}>
         <Link href="/intake" className={styles.navButton}>
           Start Screening
-        </Link>
-        <Link href="/results" className={`${styles.navButton} ${styles.navButtonSecondary}`}>
-          Previous Results
         </Link>
       </div>
     </div>
