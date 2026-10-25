@@ -1,0 +1,315 @@
+/* /r/analysis (Agent C). Uses the shared tokens from app/globals.css. */
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+  margin: 8px 0 16px;
+}
+
+.tab {
+  appearance: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: none;
+  padding: 10px 14px;
+  border-radius: 10px 10px 0 0;
+  font: inherit;
+  font-size: 14px;
+  color: var(--muted);
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+
+.tab:hover {
+  color: var(--foreground);
+}
+
+.tabActive {
+  composes: tab;
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.lock {
+  font-size: 11px;
+  margin-left: 6px;
+  color: var(--muted);
+}
+
+.gate {
+  padding: 18px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 14px;
+  background: var(--surface-sunken);
+  color: var(--muted);
+}
+
+.note {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(260px, 2fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.stage {
+  position: relative;
+  width: 100%;
+  background: var(--ink-dark);
+  border-radius: 10px;
+  overflow: hidden;
+  user-select: none;
+  touch-action: none;
+}
+
+.stage video {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+}
+
+.box {
+  position: absolute;
+  border: 2px solid #38bdf8;
+  background: rgba(56, 189, 248, 0.14);
+  cursor: move;
+}
+
+.boxSelected {
+  composes: box;
+  border-color: #facc15;
+  background: rgba(250, 204, 21, 0.18);
+}
+
+.boxInactive {
+  opacity: 0.35;
+}
+
+.boxLabel {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translateY(-100%);
+  background: rgba(11, 20, 36, 0.8);
+  color: #fff;
+  font-size: 12px;
+  padding: 1px 6px;
+  border-radius: 4px 4px 0 0;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: #facc15;
+  border: 1px solid #0b1424;
+  border-radius: 2px;
+}
+
+.hNW {
+  composes: handle;
+  left: -7px;
+  top: -7px;
+  cursor: nwse-resize;
+}
+
+.hNE {
+  composes: handle;
+  right: -7px;
+  top: -7px;
+  cursor: nesw-resize;
+}
+
+.hSW {
+  composes: handle;
+  left: -7px;
+  bottom: -7px;
+  cursor: nesw-resize;
+}
+
+.hSE {
+  composes: handle;
+  right: -7px;
+  bottom: -7px;
+  cursor: nwse-resize;
+}
+
+.seek {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.seek input[type="range"] {
+  flex: 1;
+}
+
+.boxList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.boxItem {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.boxItemSelected {
+  composes: boxItem;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
+.boxItem input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  font: inherit;
+  background: var(--surface);
+  box-sizing: border-box;
+}
+
+.full {
+  grid-column: 1 / -1;
+}
+
+.small {
+  font-size: 13px;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dimRow td {
+  color: var(--muted);
+}
+
+.progress {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+  margin: 10px 0 4px;
+}
+
+.progressBar {
+  height: 100%;
+  background: var(--primary);
+  transition: width 0.2s;
+}
+
+.chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  font-family: var(--font-text);
+}
+
+.chartGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 5px;
+  vertical-align: -1px;
+}
+
+.code {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre;
+  line-height: 1.5;
+}
+
+.pickList {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-top: 8px;
+}
+
+.pickItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.pickItem:hover {
+  background: var(--surface-sunken);
+}
+
+.pickItemActive {
+  composes: pickItem;
+  background: var(--primary-soft);
+}
+
+.checkbox {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 14px;
+}
