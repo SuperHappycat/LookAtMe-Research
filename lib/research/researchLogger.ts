@@ -10,6 +10,8 @@
 
 import { addLuma, addRow, persistGazeLog, setLevelStimulusBox, startLevel } from "./gazeLog";
 import { getResearchContext } from "./screening";
+import { startRecording, type RecordingHandle } from "./recording";
+import { handleFinishedRecording } from "./recordingUploader";
 import type { Box } from "./gaze/direction";
 import type { EngineSample } from "./gaze/types";
 
@@ -20,6 +22,9 @@ let lumaTimer: number | null = null;
 let lastBox: { left: number; top: number; width: number; height: number } | null = null;
 let lumaCanvas: HTMLCanvasElement | null = null;
 let currentVideoId = "";
+// Screen recording (agent A, spec §4.4): one per level, only with recording consent.
+let recorder: RecordingHandle | null = null;
+let lastPoint: { x: number; y: number } | null = null;
 
 function levelFromPath(): 1 | 2 | 3 | null {
   const m = /\/test([123])\b/.exec(window.location.pathname);
@@ -75,6 +80,15 @@ export const researchLogger = {
       const v = c ? measureLuma(c) : null;
       if (v !== null) addLuma(level, v);
     }, 1000);
+    lastPoint = null;
+    if (getResearchContext()?.allowRecording === true) {
+      try {
+        recorder = startRecording({ videos, webcam: getCanvas, gaze: () => lastPoint });
+      } catch (err) {
+        console.warn("recording failed to start:", err instanceof Error ? err.message : err);
+        recorder = null;
+      }
+    }
   },
 
   sample(s: EngineSample, videoPosSec: number, boxes: Box[]) {
@@ -82,6 +96,7 @@ export const researchLogger = {
     const box = union(boxes);
     if (box && box.width > 0) lastBox = box;
     const p = s.point;
+    lastPoint = p ? { x: p.x, y: p.y } : null;
     addRow({
       level,
       video_id: currentVideoId,
@@ -106,5 +121,17 @@ export const researchLogger = {
     setLevelStimulusBox(level, lastBox);
     persistGazeLog();
     active = false;
+    const rec = recorder;
+    recorder = null;
+    const ctx = getResearchContext();
+    if (rec && ctx) {
+      const lv = level;
+      void rec
+        .stop()
+        .then((result) => (result ? handleFinishedRecording(result, ctx, lv) : undefined))
+        .catch((err) => console.warn("recording not saved:", err instanceof Error ? err.message : err));
+    } else {
+      rec?.cancel();
+    }
   },
 };
