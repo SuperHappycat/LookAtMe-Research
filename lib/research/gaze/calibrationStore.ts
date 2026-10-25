@@ -22,6 +22,8 @@ export interface CalibrationRecord {
   grade?: "high" | "medium" | "low" | "fail";
   mode?: "child" | "adult";
   pointsUsed?: number;
+  /** How accuracy was measured: separate check dots, or leave-one-point-out on the calibration dots. */
+  accuracyMethod?: "validation" | "leave_one_out";
   ok: boolean;
   lowAccuracy: boolean;
   attempts: number;

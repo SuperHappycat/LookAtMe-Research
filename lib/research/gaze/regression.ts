@@ -2,9 +2,16 @@
  * lib/research/gaze/regression.ts
  * =================================
  * Small, dependency-free ridge regression used to map eye/head features to a
- * screen position. Features are standardised, expanded into a design row
- * (intercept, eye terms with 2nd-order products, linear head terms), and two
- * independent models are fitted: one for x and one for y.
+ * screen position. Features are standardised and two independent models are
+ * fitted: one for x and one for y.
+ *
+ * Designs:
+ * - "compact" (default, calibration v3): x from [eye-x, head yaw, face x], y from
+ *   [eye-y, head pitch, face y] — 4 numbers per axis. A child calibration has only
+ *   5–9 target positions; the old 13-term "full" design fitted those few positions
+ *   by leaning on incidental head movement and then missed new positions badly.
+ * - "full" (v1/v2): intercept, eye terms with 2nd-order products, every head term.
+ *   Kept so calibrations saved by the previous version still load.
  */
 
 export interface FeatureVector {
@@ -25,7 +32,11 @@ export interface FeatureVector {
 
 export const FEATURE_KEYS = ["ex", "ey", "hx", "hy", "px", "py", "s", "yaw", "pitch"] as const;
 
+export type GazeDesign = "compact" | "full";
+
 export interface GazeModel {
+  /** Missing on records saved before v3 (= "full"). */
+  design?: GazeDesign;
   mean: number[];
   std: number[];
   coefX: number[];
@@ -39,6 +50,18 @@ function toArray(f: FeatureVector): number[] {
 function designRow(z: number[]): number[] {
   const [ex, ey, hx, hy, px, py, s, yaw, pitch] = z;
   return [1, ex, ey, ex * ex, ey * ey, ex * ey, hx, hy, px, py, s, yaw, pitch];
+}
+
+/** Compact design rows: horizontal and vertical terms kept apart (z = standardised features). */
+function compactRows(z: number[]): { x: number[]; y: number[] } {
+  const [ex, ey, , , px, py, , yaw, pitch] = z;
+  return { x: [1, ex, yaw, px], y: [1, ey, pitch, py] };
+}
+
+function rowsFor(design: GazeDesign, z: number[]): { x: number[]; y: number[] } {
+  if (design === "compact") return compactRows(z);
+  const r = designRow(z);
+  return { x: r, y: r };
 }
 
 /** Solves A x = b by Gaussian elimination with partial pivoting. */
@@ -81,6 +104,7 @@ function ridge(X: number[][], y: number[], lambda: number): number[] {
 export function fitGazeModel(
   samples: { features: FeatureVector; x: number; y: number }[],
   lambda: number,
+  design: GazeDesign = "compact",
 ): GazeModel {
   if (samples.length < 20) throw new Error("Not enough calibration samples (face not visible?).");
   const raw = samples.map((s) => toArray(s.features));
@@ -91,21 +115,19 @@ export function fitGazeModel(
   for (const r of raw) r.forEach((v, j) => (std[j] += (v - mean[j]) ** 2 / raw.length));
   for (let j = 0; j < k; j++) std[j] = Math.sqrt(std[j]) || 1;
 
-  const X = raw.map((r) => designRow(r.map((v, j) => (v - mean[j]) / std[j])));
-  const coefX = ridge(X, samples.map((s) => s.x), lambda);
-  const coefY = ridge(X, samples.map((s) => s.y), lambda);
-  return { mean, std, coefX, coefY };
+  const rows = raw.map((r) => rowsFor(design, r.map((v, j) => (v - mean[j]) / std[j])));
+  const coefX = ridge(rows.map((r) => r.x), samples.map((s) => s.x), lambda);
+  const coefY = ridge(rows.map((r) => r.y), samples.map((s) => s.y), lambda);
+  return { design, mean, std, coefX, coefY };
 }
 
 export function predictGaze(model: GazeModel, f: FeatureVector): { x: number; y: number } {
   const z = toArray(f).map((v, j) => (v - model.mean[j]) / model.std[j]);
-  const row = designRow(z);
+  const rows = rowsFor(model.design ?? "full", z);
   let x = 0;
   let y = 0;
-  for (let i = 0; i < row.length; i++) {
-    x += row[i] * model.coefX[i];
-    y += row[i] * model.coefY[i];
-  }
+  for (let i = 0; i < rows.x.length; i++) x += rows.x[i] * model.coefX[i];
+  for (let i = 0; i < rows.y.length; i++) y += rows.y[i] * model.coefY[i];
   return { x, y };
 }
 
@@ -114,4 +136,30 @@ export function median(values: number[]): number {
   const s = [...values].sort((a, b) => a - b);
   const m = Math.floor(s.length / 2);
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+/**
+ * Leave-one-point-out error: for each held-out target, fit on the other targets and measure how far the
+ * median prediction lands from it (px). Used by child mode instead of extra validation dots, so every dot
+ * the child looks at also trains the model.
+ */
+export function leaveOnePointOut(
+  points: { x: number; y: number; features: FeatureVector[] }[],
+  lambda: number,
+  heldOut: (i: number) => boolean = () => true,
+  design: GazeDesign = "compact",
+): number[] {
+  const errors: number[] = [];
+  points.forEach((p, i) => {
+    if (!heldOut(i)) return;
+    const train = points.flatMap((q, j) => (j === i ? [] : q.features.map((features) => ({ features, x: q.x, y: q.y }))));
+    if (train.length < 20 || !p.features.length) {
+      errors.push(Infinity);
+      return;
+    }
+    const m = fitGazeModel(train, lambda, design);
+    const preds = p.features.map((f) => predictGaze(m, f));
+    errors.push(Math.hypot(median(preds.map((q) => q.x)) - p.x, median(preds.map((q) => q.y)) - p.y));
+  });
+  return errors;
 }

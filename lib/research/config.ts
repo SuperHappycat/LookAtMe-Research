@@ -33,26 +33,31 @@ export const RESEARCH_CONFIG = {
   maxEndCheckErrorDeg: 6,
   /** How many times "recalibrate" is offered before allowing "continue with low accuracy". */
   maxRecalibrations: 2,
-  /** Children younger than this (months) get child mode: 5 points, animated animals and sounds. */
+  /** Children younger than this (months) get child mode: 8 points, animated animals and sounds. */
   childModeUnderMonths: 72,
   /** Eye-feature spread (fraction of eye width) allowed across the fixation window. */
   fixationMaxSpread: 0.035,
   /** Frames (at ~20 per second) the eyes must stay still before samples count. */
   fixationWindow: 4,
-  /** Per mode: points, samples needed per point, re-attract after, give up after (ms). */
+  /**
+   * Per mode: points, samples needed per point, re-attract after, give up after (ms).
+   * `validation: []` → no separate check dots: accuracy is estimated by leave-one-point-out on the
+   * `looPoints` (calibration v3; every target the child looks at also trains the model).
+   */
   modes: {
     child: {
       points: [
         [0.5, 0.5], [0.15, 0.15], [0.85, 0.15], [0.15, 0.85], [0.85, 0.85],
-      ] as ReadonlyArray<readonly [number, number]>,
-      validation: [
         [0.3, 0.3], [0.7, 0.3], [0.5, 0.75],
       ] as ReadonlyArray<readonly [number, number]>,
+      validation: [] as ReadonlyArray<readonly [number, number]>,
+      /** Inner points (not corners) used for the leave-one-out accuracy estimate. */
+      looPoints: [0, 5, 6, 7] as ReadonlyArray<number>,
       samplesPerPoint: 12,
       validationSamples: 8,
       reattractAfterMs: 2500,
       giveUpAfterMs: 9000,
-      minPoints: 4,
+      minPoints: 6,
     },
     adult: {
       points: [
@@ -62,6 +67,7 @@ export const RESEARCH_CONFIG = {
       validation: [
         [0.3, 0.3], [0.7, 0.3], [0.3, 0.7], [0.7, 0.7],
       ] as ReadonlyArray<readonly [number, number]>,
+      looPoints: [] as ReadonlyArray<number>,
       samplesPerPoint: 18,
       validationSamples: 10,
       reattractAfterMs: 2000,

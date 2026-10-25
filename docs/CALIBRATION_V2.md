@@ -40,6 +40,28 @@ Written Oct 25, 2026. Code: `components/research/CalibrationClient.tsx`, `useGaz
 - **Pause at any time (P)**, with no penalty: paused time doesn't count towards giving up on a point.
 - Varied targets in a shuffled order (centre first), to reduce habituation.
 
+## Calibration v3 (why v2 still failed for children)
+
+v2 fitted a 13-term model (eye terms, their squares and products, and every head term) from only 5 child
+targets. With so few target positions the model "explained" them using whatever the child's head happened to be
+doing at each one, then missed new positions badly; the 3 check dots showed that, so it kept saying "retry".
+In a simulation of a restless child (head wanders and partly turns toward targets, noisy iris landmarks) v2's
+true error was about 370 px (≈ 9°) and it passed 8% of the time.
+
+v3 changes:
+- **Compact model**: horizontal gaze from eye-x, head yaw and face position x; vertical from eye-y, head pitch
+  and face position y (4 numbers per axis instead of 13). Same features, far less overfitting.
+- **Child mode: 8 targets, no separate check dots.** The 3 former check positions become calibration targets
+  (same number of animals for the child), and accuracy is measured by *leave-one-point-out* on the 4 inner
+  targets: fit without that target, see how far the prediction lands from it. In simulation this estimate is
+  within a few percent of the true error.
+- Simulated restless child: true error ≈ 95 px (≈ 2.4°), passes ~100% (v2: 370 px, 8%). Adults keep 9 targets
+  plus 4 check dots, now with the compact model.
+- **Download calibration data** (result screen): the raw numbers (no images, no child code) so the settings
+  can be tuned on real children.
+
+The simulation is a model of reality, not a real child; pilot data should confirm it.
+
 ## Settings to tune with pilot data (`lib/research/config.ts`)
 
 `maxCalibrationErrorDeg` (5), `maxEndCheckErrorDeg` (6), `childModeUnderMonths` (72), `fixationMaxSpread`,
