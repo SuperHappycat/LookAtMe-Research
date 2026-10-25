@@ -17,6 +17,11 @@ export interface CalibrationRecord {
   model: GazeModel;
   viewport: { w: number; h: number };
   meanErrorPx: number;
+  /** Approximate visual degrees (assumed viewing distance; see config). */
+  meanErrorDeg?: number;
+  grade?: "high" | "medium" | "low" | "fail";
+  mode?: "child" | "adult";
+  pointsUsed?: number;
   ok: boolean;
   lowAccuracy: boolean;
   attempts: number;

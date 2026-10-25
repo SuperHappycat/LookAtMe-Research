@@ -56,7 +56,24 @@ function eye(
   };
 }
 
-export function extractFeatures(landmarks: Landmark[], imageW: number, imageH: number): FrameFeatures | null {
+/**
+ * Head yaw/pitch (radians) from MediaPipe's 4×4 column-major facial transformation matrix.
+ * Real head-pose angles separate "turned head" from "moved eyes" better than landmark proxies.
+ */
+export function headPose(matrix: ArrayLike<number> | null | undefined): { yaw: number; pitch: number } {
+  if (!matrix || matrix.length < 16) return { yaw: 0, pitch: 0 };
+  const r02 = matrix[8];
+  const r12 = matrix[9];
+  const r22 = matrix[10];
+  return { yaw: Math.atan2(r02, r22), pitch: Math.asin(Math.max(-1, Math.min(1, -r12))) };
+}
+
+export function extractFeatures(
+  landmarks: Landmark[],
+  imageW: number,
+  imageH: number,
+  matrix?: ArrayLike<number> | null,
+): FrameFeatures | null {
   if (!landmarks || landmarks.length < 478) return null;
   const P = (i: number): [number, number] => [landmarks[i].x * imageW, landmarks[i].y * imageH];
 
@@ -73,8 +90,11 @@ export function extractFeatures(landmarks: Landmark[], imageW: number, imageH: n
   const midX = (cax + cbx) / 2;
   const midY = (fy + chy) / 2;
 
+  const pose = headPose(matrix);
   return {
     features: {
+      yaw: pose.yaw,
+      pitch: pose.pitch,
       ex: (a.h + b.h) / 2,
       ey: (a.v + b.v) / 2,
       hx: (nx - midX) / faceW,

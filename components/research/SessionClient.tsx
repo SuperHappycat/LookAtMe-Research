@@ -37,6 +37,8 @@ interface SessionDetail {
     test2?: { facePct: number; objectPct: number };
     test3?: { blockPct: number; facePct: number; accuracyPct: number; latencyMs: number | null };
     cameraCheck?: { faceFoundPct: number | null; meanLuma: number | null; medianFaceScale: number | null; passed: boolean } | null;
+    calibration?: { meanErrorDeg: number | null; grade: string | null; mode: string | null; pointsUsed: number | null; attempts: number } | null;
+    endCheck?: { meanErrorDeg: number | null; skipped: boolean } | null;
   } | null;
   quality: { lightingOkPct: number | null; distanceOkPct: number | null; reasons: string[] } | null;
   child: { code: string; birth_month: string | null; sex: string | null } | null;
@@ -127,7 +129,18 @@ export default function SessionClient() {
         แสง / lighting {fmt(s.quality?.lightingOkPct ?? null, "%")} · ระยะ / distance {fmt(s.quality?.distanceOkPct ?? null, "%")}
         <br />
         ปรับเทียบ / Calibration error: {fmt(s.calibration_error_px, " px")}
+        {r.calibration?.meanErrorDeg != null && ` ≈ ${r.calibration.meanErrorDeg.toFixed(1)}°`}
+        {r.calibration?.grade && ` · ${r.calibration.grade}`}
+        {r.calibration?.mode && ` · ${r.calibration.mode === "child" ? "โหมดเด็ก / child mode" : "adult mode"}`}
+        {r.calibration && ` · ${r.calibration.attempts} attempt(s)`}
         {s.low_accuracy && " (ความแม่นยำต่ำ / low accuracy)"}
+        {r.endCheck && (
+          <>
+            <br />
+            ตรวจท้ายสุด / Final check:{" "}
+            {r.endCheck.skipped || r.endCheck.meanErrorDeg === null ? "ข้าม / skipped" : `≈ ${r.endCheck.meanErrorDeg.toFixed(1)}°`}
+          </>
+        )}
         {cc && (
           <>
             <br />

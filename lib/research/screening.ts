@@ -19,6 +19,8 @@ export interface ResearchContext {
   clientSessionId: string;
   engine: string;
   startedAt: string;
+  /** Child's age in months at the start of the screening (chooses child-mode calibration). */
+  ageMonths?: number | null;
   cameraCheck?: {
     faceFoundPct: number | null;
     meanLuma: number | null;

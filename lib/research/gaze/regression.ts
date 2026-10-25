@@ -18,9 +18,12 @@ export interface FeatureVector {
   px: number;
   py: number;
   s: number;
+  /** Head rotation from MediaPipe's facial transformation matrix (radians; 0 if unavailable). */
+  yaw: number;
+  pitch: number;
 }
 
-export const FEATURE_KEYS = ["ex", "ey", "hx", "hy", "px", "py", "s"] as const;
+export const FEATURE_KEYS = ["ex", "ey", "hx", "hy", "px", "py", "s", "yaw", "pitch"] as const;
 
 export interface GazeModel {
   mean: number[];
@@ -34,8 +37,8 @@ function toArray(f: FeatureVector): number[] {
 }
 
 function designRow(z: number[]): number[] {
-  const [ex, ey, hx, hy, px, py, s] = z;
-  return [1, ex, ey, ex * ex, ey * ey, ex * ey, hx, hy, px, py, s];
+  const [ex, ey, hx, hy, px, py, s, yaw, pitch] = z;
+  return [1, ex, ey, ex * ex, ey * ey, ex * ey, hx, hy, px, py, s, yaw, pitch];
 }
 
 /** Solves A x = b by Gaussian elimination with partial pivoting. */

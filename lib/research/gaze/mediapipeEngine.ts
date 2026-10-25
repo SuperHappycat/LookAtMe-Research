@@ -39,6 +39,7 @@ async function init(): Promise<void> {
     baseOptions: { modelAssetPath: RESEARCH_CONFIG.mediapipeModelPath, delegate },
     runningMode: "VIDEO" as const,
     numFaces: 1,
+    outputFacialTransformationMatrixes: true,
   });
   try {
     landmarker = await FaceLandmarker.createFromOptions(fileset, options("GPU"));
@@ -73,7 +74,7 @@ export function detectFeatures(canvas: HTMLCanvasElement): FrameFeatures | null 
   const result = landmarker.detectForVideo(canvas, ts);
   const face = result.faceLandmarks?.[0];
   if (!face) return null;
-  return extractFeatures(face, canvas.width, canvas.height);
+  return extractFeatures(face, canvas.width, canvas.height, result.facialTransformationMatrixes?.[0]?.data);
 }
 
 export function isBlink(f: FrameFeatures): boolean {

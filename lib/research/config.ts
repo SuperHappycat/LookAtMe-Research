@@ -24,24 +24,54 @@ export const RESEARCH_CONFIG = {
   mediapipeWasmPath: "/mediapipe/wasm",
   mediapipeModelPath: "/mediapipe/face_landmarker.task",
 
-  // ---- Calibration (TBD – tune with pilot data) ----
-  /** Calibration passes when the mean validation error is at or below this many CSS px. */
-  maxCalibrationErrorPx: 150,
+  // ---- Calibration v2 (TBD – tune with pilot data; see docs/CALIBRATION_V2.md) ----
+  /** Assumed eye-to-screen distance, used only to convert px errors to approximate degrees. */
+  viewingDistanceCm: 60,
+  /** Pass when mean validation error ≤ this (approx. degrees). 5° = the exclusion line used for infants online (Bánki et al., 2022). */
+  maxCalibrationErrorDeg: 5,
+  /** Final check after Test 3: error above this (approx. degrees) flags the session for retest (drift). */
+  maxEndCheckErrorDeg: 6,
   /** How many times "recalibrate" is offered before allowing "continue with low accuracy". */
   maxRecalibrations: 2,
-  /** Time the child gets to look at a new dot before samples are collected. */
-  calibrationSettleMs: 700,
-  /** Time samples are collected per dot. */
-  calibrationCollectMs: 1200,
-  /** Dot positions as fractions of the viewport (9-point grid). */
-  calibrationPoints: [
-    [0.1, 0.1], [0.5, 0.1], [0.9, 0.1],
-    [0.1, 0.5], [0.5, 0.5], [0.9, 0.5],
-    [0.1, 0.9], [0.5, 0.9], [0.9, 0.9],
-  ] as ReadonlyArray<readonly [number, number]>,
-  /** Extra dots used only to measure accuracy after fitting. */
-  validationPoints: [
-    [0.3, 0.3], [0.7, 0.3], [0.3, 0.7], [0.7, 0.7],
+  /** Children younger than this (months) get child mode: 5 points, animated animals and sounds. */
+  childModeUnderMonths: 72,
+  /** Eye-feature spread (fraction of eye width) allowed across the fixation window. */
+  fixationMaxSpread: 0.035,
+  /** Frames (at ~20 per second) the eyes must stay still before samples count. */
+  fixationWindow: 4,
+  /** Per mode: points, samples needed per point, re-attract after, give up after (ms). */
+  modes: {
+    child: {
+      points: [
+        [0.5, 0.5], [0.15, 0.15], [0.85, 0.15], [0.15, 0.85], [0.85, 0.85],
+      ] as ReadonlyArray<readonly [number, number]>,
+      validation: [
+        [0.3, 0.3], [0.7, 0.3], [0.5, 0.75],
+      ] as ReadonlyArray<readonly [number, number]>,
+      samplesPerPoint: 12,
+      validationSamples: 8,
+      reattractAfterMs: 2500,
+      giveUpAfterMs: 9000,
+      minPoints: 4,
+    },
+    adult: {
+      points: [
+        [0.5, 0.5], [0.1, 0.1], [0.5, 0.1], [0.9, 0.1], [0.1, 0.5],
+        [0.9, 0.5], [0.1, 0.9], [0.5, 0.9], [0.9, 0.9],
+      ] as ReadonlyArray<readonly [number, number]>,
+      validation: [
+        [0.3, 0.3], [0.7, 0.3], [0.3, 0.7], [0.7, 0.7],
+      ] as ReadonlyArray<readonly [number, number]>,
+      samplesPerPoint: 18,
+      validationSamples: 10,
+      reattractAfterMs: 2000,
+      giveUpAfterMs: 6000,
+      minPoints: 7,
+    },
+  },
+  /** End-of-session check (after Test 3). */
+  endCheckPoints: [
+    [0.3, 0.35], [0.7, 0.35], [0.5, 0.7],
   ] as ReadonlyArray<readonly [number, number]>,
   /** Ridge regularisation for the gaze mapping. */
   ridgeLambda: 0.01,

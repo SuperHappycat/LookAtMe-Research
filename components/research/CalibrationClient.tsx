@@ -1,115 +1,85 @@
 "use client";
 
 /**
- * components/research/CalibrationClient.tsx
- * ===========================================
- * 9-dot gaze calibration for the MediaPipe engine (Research app only).
+ * components/research/CalibrationClient.tsx — calibration v2 (Research app, MediaPipe engine).
  *
- * 1. The child follows a dot to 9 places; for each place we collect eye and
- *    head features from the webcam (blinks and no-face frames skipped).
- * 2. A ridge regression maps features -> screen position (viewport px).
- * 3. 4 extra dots measure accuracy (mean error in px).
- * 4. Pass if error <= RESEARCH_CONFIG.maxCalibrationErrorPx (TBD value).
- *    Recalibration is offered up to maxRecalibrations times, then the user
- *    may continue with a "low accuracy" flag.
+ * Child mode (default for children under RESEARCH_CONFIG.childModeUnderMonths): 5 points,
+ * animated animals that loom onto each point with gentle sounds, a small reward after each point.
+ * Adult mode: 9 points with a plain dot.
  *
- * Uses the same mirrored 640×480 capture canvas as the test runner, so the
- * fitted mapping matches what the tests feed the engine.
+ * Both modes collect only during fixations (gaze-contingent), re-attract automatically when the
+ * child looks away, let the operator re-attract / skip / pause, retry skipped points once,
+ * then validate on separate points and report error in px and approximate degrees.
+ * "Improve weak spots" redoes only the points near the worst validation errors.
+ * Background and sources: docs/CALIBRATION_V2.md.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "@/styles/shared.module.css";
 import rs from "@/styles/research.module.css";
-import { CAPTURE_W, CAPTURE_H } from "@/hooks/useGazeTestRunner";
 import { RESEARCH_CONFIG } from "@/lib/research/config";
 import { getGazeEngine } from "@/lib/research/gaze";
-import { detectFeatures, isBlink } from "@/lib/research/gaze/mediapipeEngine";
 import { fitGazeModel, median, predictGaze, type FeatureVector, type GazeModel } from "@/lib/research/gaze/regression";
+import {
+  chooseMode,
+  gradeDeg,
+  nearestPoint,
+  orderPoints,
+  pxToDeg,
+  worstIndices,
+  type AccuracyGrade,
+  type CalibrationMode,
+} from "@/lib/research/gaze/calibrationCore";
 import { getCalibrationState, saveCalibration, type CalibrationRecord } from "@/lib/research/gaze/calibrationStore";
+import { getResearchContext } from "@/lib/research/screening";
+import { unlockAudio } from "@/lib/research/attentionSound";
+import CalibrationStage from "./CalibrationStage";
+import { useGazeStage } from "./useGazeStage";
+import { useMirroredCamera } from "./useMirroredCamera";
+import { CAPTURE_H, CAPTURE_W } from "@/hooks/useGazeTestRunner";
 
-type Phase = "intro" | "loading" | "running" | "fitting" | "result" | "error";
+type Phase = "intro" | "loading" | "running" | "result" | "error";
 
-interface DotState {
-  x: number;
-  y: number;
-  collecting: boolean;
-  label: string;
-}
+const GRADE_TEXT: Record<AccuracyGrade, string> = {
+  high: "ดีมาก / High",
+  medium: "ดี / Medium",
+  low: "พอใช้ / Low",
+  fail: "ไม่ผ่าน / Not enough",
+};
 
-const SAMPLE_EVERY_MS = 50;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export default function CalibrationClient() {
   const router = useRouter();
   const engine = getGazeEngine();
-  const [phase, setPhase] = useState<Phase>("intro");
-  const [error, setError] = useState<string | null>(null);
-  const [dot, setDot] = useState<DotState | null>(null);
-  const [noFace, setNoFace] = useState(false);
-  const [result, setResult] = useState<CalibrationRecord | null>(null);
-  const [attempts, setAttempts] = useState(0);
-  const [existing, setExisting] = useState<CalibrationRecord | null>(null);
+  const { videoRef: camVideoRef, canvasRef: camCanvasRef, start: camStart, stop: camStop, grab } = useMirroredCamera();
+  const stage = useGazeStage(grab);
+  const { runPoint, resetControls, isCancelled } = stage;
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const cancelledRef = useRef(false);
+  const [phase, setPhase] = useState<Phase>("intro");
+  const [mode, setMode] = useState<CalibrationMode>("adult");
+  const [childCode, setChildCode] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<CalibrationRecord | null>(null);
+  const [pointErrors, setPointErrors] = useState<number[]>([]);
+  const [existing, setExisting] = useState<CalibrationRecord | null>(null);
+  const [attempts, setAttempts] = useState(0);
+  /** Training samples per calibration point index, kept so "improve weak spots" can replace a few. */
+  const trainRef = useRef<Map<number, FeatureVector[]>>(new Map());
 
   useEffect(() => {
     engine.preload();
+    const ctx = getResearchContext();
     const s = getCalibrationState();
-    // sessionStorage is browser-only, so read it after mount.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    /* eslint-disable react-hooks/set-state-in-effect -- sessionStorage is browser-only */
+    if (ctx) {
+      setChildCode(ctx.childCode);
+      setMode(chooseMode(ctx.ageMonths ?? null, RESEARCH_CONFIG.childModeUnderMonths));
+    }
     if (s.state === "ready" && (s.record.ok || s.record.lowAccuracy)) setExisting(s.record);
-    return () => {
-      cancelledRef.current = true;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-    };
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [engine]);
-
-  const grabFrame = useCallback((): HTMLCanvasElement | null => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas || video.readyState < 2) return null;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) return null;
-    // Identical mirroring to hooks/useGazeTestRunner.ts.
-    ctx.save();
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    ctx.restore();
-    return canvas;
-  }, []);
-
-  /** Shows a dot, waits for the child to settle, then samples features for collectMs. */
-  const runPoint = useCallback(
-    async (fx: number, fy: number, label: string): Promise<{ x: number; y: number; feats: FeatureVector[] }> => {
-      const x = fx * window.innerWidth;
-      const y = fy * window.innerHeight;
-      setDot({ x, y, collecting: false, label });
-      await sleep(RESEARCH_CONFIG.calibrationSettleMs);
-      setDot({ x, y, collecting: true, label });
-      const feats: FeatureVector[] = [];
-      let missed = 0;
-      const end = performance.now() + RESEARCH_CONFIG.calibrationCollectMs;
-      while (performance.now() < end && !cancelledRef.current) {
-        const canvas = grabFrame();
-        const f = canvas ? detectFeatures(canvas) : null;
-        if (f && !isBlink(f)) {
-          feats.push(f.features);
-          missed = 0;
-        } else {
-          missed++;
-        }
-        setNoFace(missed * SAMPLE_EVERY_MS > 800);
-        await sleep(SAMPLE_EVERY_MS);
-      }
-      return { x, y, feats };
-    },
-    [grabFrame],
-  );
 
   const waitForEngine = useCallback(async () => {
     const deadline = performance.now() + 60_000;
@@ -121,81 +91,147 @@ export default function CalibrationClient() {
     if (s.status !== "ready") throw new Error(s.error ?? "The gaze engine did not load in time.");
   }, [engine]);
 
-  const start = useCallback(async () => {
-    cancelledRef.current = false;
+  const prepare = useCallback(async (): Promise<boolean> => {
+    unlockAudio();
+    resetControls();
     setError(null);
-    setResult(null);
     setPhase("loading");
     try {
-      if (!streamRef.current) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: CAPTURE_W, height: CAPTURE_H },
-          audio: false,
-        });
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-        }
-      }
+      await camStart();
       await waitForEngine();
+      return true;
     } catch (err) {
       setError(err instanceof Error ? `${err.name}: ${err.message}` : String(err));
       setPhase("error");
-      return;
+      return false;
     }
+  }, [camStart, waitForEngine, resetControls]);
 
-    setPhase("running");
-    const viewport = { w: window.innerWidth, h: window.innerHeight };
+  /** Collects training data for the given calibration-point indices (skipped ones retried once). */
+  const collectTraining = useCallback(
+    async (indices: number[]) => {
+      const m = RESEARCH_CONFIG.modes[mode];
+      const ordered = orderPoints(indices, (i) => m.points[i][0] === 0.5 && m.points[i][1] === 0.5);
+      let pending = ordered;
+      for (let round = 0; round < 2 && pending.length; round++) {
+        const skipped: number[] = [];
+        for (let k = 0; k < pending.length; k++) {
+          const i = pending[k];
+          const [fx, fy] = m.points[i];
+          const label = `${round ? "ลองอีกครั้ง / retry · " : ""}${k + 1} / ${pending.length}`;
+          const r = await runPoint(fx, fy, i, mode, m.samplesPerPoint, `มองที่${mode === "child" ? "รูป" : "จุด"} / Look at the target · ${label}`);
+          if (isCancelled()) return;
+          if (r.skipped) skipped.push(i);
+          else trainRef.current.set(i, r.features);
+        }
+        pending = skipped;
+      }
+    },
+    [mode, runPoint, isCancelled],
+  );
+
+  /** Fits the model on the stored training data, validates, and saves the record. */
+  const fitAndValidate = useCallback(async () => {
+    const m = RESEARCH_CONFIG.modes[mode];
+    if (trainRef.current.size < m.minPoints) {
+      throw new Error(
+        `เก็บข้อมูลได้ ${trainRef.current.size}/${m.points.length} จุด ไม่พอ / Only ${trainRef.current.size} of ${m.points.length} points were collected (need ${m.minPoints}). The child may not have looked at the targets.`,
+      );
+    }
     const train: { features: FeatureVector; x: number; y: number }[] = [];
-    const calPts = RESEARCH_CONFIG.calibrationPoints;
-    for (let i = 0; i < calPts.length; i++) {
-      const p = await runPoint(calPts[i][0], calPts[i][1], `${i + 1} / ${calPts.length}`);
-      if (cancelledRef.current) return;
-      p.feats.forEach((features) => train.push({ features, x: p.x, y: p.y }));
-    }
+    trainRef.current.forEach((feats, i) => {
+      const [fx, fy] = m.points[i];
+      feats.forEach((features) => train.push({ features, x: fx * window.innerWidth, y: fy * window.innerHeight }));
+    });
+    const model: GazeModel = fitGazeModel(train, RESEARCH_CONFIG.ridgeLambda);
 
-    setPhase("fitting");
-    let model: GazeModel;
-    try {
-      model = fitGazeModel(train, RESEARCH_CONFIG.ridgeLambda);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setPhase("error");
-      return;
-    }
-
-    setPhase("running");
     const errors: number[] = [];
-    const valPts = RESEARCH_CONFIG.validationPoints;
-    for (let i = 0; i < valPts.length; i++) {
-      const p = await runPoint(valPts[i][0], valPts[i][1], `ตรวจสอบ / check ${i + 1} / ${valPts.length}`);
-      if (cancelledRef.current) return;
-      if (p.feats.length === 0) continue;
-      const preds = p.feats.map((f) => predictGaze(model, f));
-      const mx = median(preds.map((q) => q.x));
-      const my = median(preds.map((q) => q.y));
-      errors.push(Math.hypot(mx - p.x, my - p.y));
+    for (let k = 0; k < m.validation.length; k++) {
+      const [fx, fy] = m.validation[k];
+      const r = await runPoint(fx, fy, 10 + k, mode, m.validationSamples, `ตรวจความแม่นยำ / Checking accuracy · ${k + 1} / ${m.validation.length}`);
+      if (isCancelled()) return null;
+      if (r.skipped) {
+        errors.push(Infinity);
+        continue;
+      }
+      const preds = r.features.map((f) => predictGaze(model, f));
+      errors.push(Math.hypot(median(preds.map((p) => p.x)) - r.x, median(preds.map((p) => p.y)) - r.y));
     }
-    setDot(null);
-    setNoFace(false);
-
+    const finite = errors.filter(Number.isFinite);
+    const meanErrorPx = finite.length >= Math.ceil(m.validation.length / 2) ? finite.reduce((a, b) => a + b, 0) / finite.length : Infinity;
+    const meanErrorDeg = pxToDeg(meanErrorPx, RESEARCH_CONFIG.viewingDistanceCm);
     const nextAttempts = attempts + 1;
     setAttempts(nextAttempts);
-    const meanErrorPx = errors.length === valPts.length ? errors.reduce((a, b) => a + b, 0) / errors.length : Infinity;
     const rec: CalibrationRecord = {
       model,
-      viewport,
+      viewport: { w: window.innerWidth, h: window.innerHeight },
       meanErrorPx,
-      ok: meanErrorPx <= RESEARCH_CONFIG.maxCalibrationErrorPx,
+      meanErrorDeg,
+      grade: gradeDeg(meanErrorDeg),
+      mode,
+      pointsUsed: trainRef.current.size,
+      ok: meanErrorDeg <= RESEARCH_CONFIG.maxCalibrationErrorDeg,
       lowAccuracy: false,
       attempts: nextAttempts,
       createdAt: new Date().toISOString(),
     };
     saveCalibration(rec);
-    setResult(rec);
-    setPhase("result");
-  }, [attempts, runPoint, waitForEngine]);
+    setPointErrors(errors);
+    return rec;
+  }, [mode, runPoint, isCancelled, attempts]);
+
+  const finish = useCallback(
+    (rec: CalibrationRecord | null) => {
+      stage.setTarget(null);
+      camStop();
+      if (!rec) {
+        setPhase("intro");
+        return;
+      }
+      setResult(rec);
+      setPhase("result");
+    },
+    [stage, camStop],
+  );
+
+  const fail = useCallback(
+    (err: unknown) => {
+      stage.setTarget(null);
+      camStop();
+      setError(err instanceof Error ? err.message : String(err));
+      setPhase("error");
+    },
+    [stage, camStop],
+  );
+
+  const startFull = useCallback(async () => {
+    if (!(await prepare())) return;
+    trainRef.current = new Map();
+    setPhase("running");
+    try {
+      await collectTraining(allPoints(mode));
+      if (isCancelled()) return finish(null);
+      finish(await fitAndValidate());
+    } catch (err) {
+      fail(err);
+    }
+  }, [prepare, collectTraining, fitAndValidate, finish, fail, isCancelled, mode]);
+
+  /** Redo only the calibration points closest to the worst validation points, then re-validate. */
+  const improve = useCallback(async () => {
+    if (!(await prepare())) return;
+    const m = RESEARCH_CONFIG.modes[mode];
+    const worst = worstIndices(pointErrors, 2).map((vi) => nearestPoint(m.points, m.validation[vi][0], m.validation[vi][1]));
+    const redo = [...new Set(worst)];
+    setPhase("running");
+    try {
+      await collectTraining(redo);
+      if (isCancelled()) return finish(null);
+      finish(await fitAndValidate());
+    } catch (err) {
+      fail(err);
+    }
+  }, [prepare, mode, pointErrors, collectTraining, fitAndValidate, finish, fail, isCancelled]);
 
   const continueLowAccuracy = useCallback(() => {
     if (!result) return;
@@ -204,14 +240,14 @@ export default function CalibrationClient() {
   }, [result, router]);
 
   const canRecalibrate = attempts <= RESEARCH_CONFIG.maxRecalibrations;
+  const m = RESEARCH_CONFIG.modes[mode];
 
   return (
     <div className={styles.pageNarrow}>
       <h1 className={styles.titleCentered}>ปรับเทียบสายตา / Gaze calibration</h1>
       <p className={styles.subtitleCentered}>
-        ใช้เวลาประมาณ 30 วินาที ทำครั้งเดียวก่อนเริ่มแบบทดสอบทั้ง 3 ระดับ
-        <br />
-        About 30 seconds, once before the three tests.
+        {childCode ? `${childCode} · ` : ""}
+        {mode === "child" ? `${m.points.length} จุด รูปสัตว์และเสียง / ${m.points.length} points with animals and sounds` : `${m.points.length} จุด / ${m.points.length} points`}
       </p>
 
       {engine.name !== "mediapipe" && (
@@ -225,22 +261,40 @@ export default function CalibrationClient() {
 
       {engine.name === "mediapipe" && phase === "intro" && (
         <div className={styles.card}>
-          <ol className={rs.steps}>
-            <li>ให้เด็กนั่งตรงหน้าจอ ห่างประมาณหนึ่งช่วงแขน มีแสงสว่างที่ใบหน้า</li>
-            <li>อย่าปรับขนาดหน้าต่างเบราว์เซอร์หลังจากนี้</li>
-            <li>ให้เด็กมองตามจุดสีแดงที่เคลื่อนไปบนจอ (ศีรษะขยับได้เล็กน้อย)</li>
-          </ol>
-          <p style={{ color: "var(--muted)", marginTop: 0 }}>
-            Seat the child about an arm&apos;s length from the screen with light on the face. Don&apos;t resize
-            the browser window after this. The child follows the red dot with their eyes.
+          <div className={rs.modeToggle} style={{ marginBottom: 14 }}>
+            <button className={mode === "child" ? rs.modeOn : ""} onClick={() => setMode("child")}>
+              เด็ก / Child
+            </button>
+            <button className={mode === "adult" ? rs.modeOn : ""} onClick={() => setMode("adult")}>
+              ผู้ใหญ่ / Adult
+            </button>
+          </div>
+          {mode === "child" ? (
+            <ol className={rs.steps}>
+              <li>ให้เด็กนั่งตักผู้ปกครองหรือเก้าอี้ ห่างจอประมาณหนึ่งช่วงแขน แสงส่องหน้าเด็ก ไม่มีแสงจ้าด้านหลัง</li>
+              <li>ปิดสิ่งรบกวนรอบจอ ผู้ปกครองไม่ชี้หรือพูดบอกให้มอง (ให้รูปและเสียงดึงความสนใจเอง)</li>
+              <li>ถ้าเด็กหันไปทางอื่น กด Space เพื่อเรียกความสนใจ หรือ S เพื่อข้ามจุด · P หยุดพัก</li>
+              <li>เด็กที่ไวต่อเสียง: ลดเสียงหรือปิดเสียงได้ที่แถบด้านล่าง</li>
+            </ol>
+          ) : (
+            <ol className={rs.steps}>
+              <li>นั่งห่างจอประมาณหนึ่งช่วงแขน แสงส่องหน้า</li>
+              <li>มองจุดให้นิ่งจนวงสีเขียวครบ แล้วจุดจะย้ายเอง</li>
+              <li>อย่าปรับขนาดหน้าต่างเบราว์เซอร์หลังจากนี้</li>
+            </ol>
+          )}
+          <p style={{ color: "var(--muted)", marginTop: 0, fontSize: 14 }}>
+            {mode === "child"
+              ? "Seat the child (on a parent's lap is fine) about an arm's length away, light on the face. Remove distractions; let the animals and sounds attract the child rather than pointing. Space = attract, S = skip, P = pause. Lower or mute the sound for sound-sensitive children."
+              : "Sit about an arm's length away. Look at each dot until the green ring fills; it moves on by itself. Don't resize the window afterwards."}
           </p>
           <div className={styles.saveRow}>
-            <button className={styles.primaryButton} onClick={start}>
+            <button className={styles.primaryButton} onClick={startFull}>
               เริ่มปรับเทียบ / Start calibration
             </button>
             {existing && (
               <button className={styles.secondaryButton} onClick={() => router.push("/test1")}>
-                ใช้ค่าเดิม / Use current calibration ({Math.round(existing.meanErrorPx)} px)
+                ใช้ค่าเดิม / Use current ({existing.meanErrorDeg ? `${existing.meanErrorDeg.toFixed(1)}°` : `${Math.round(existing.meanErrorPx)} px`})
               </button>
             )}
           </div>
@@ -251,8 +305,8 @@ export default function CalibrationClient() {
 
       {phase === "error" && (
         <div className={styles.card}>
-          <p className={styles.errorText}>เกิดข้อผิดพลาด / Something went wrong: {error}</p>
-          <button className={styles.primaryButton} onClick={start}>
+          <p className={styles.errorText}>{error}</p>
+          <button className={styles.primaryButton} onClick={startFull}>
             ลองใหม่ / Try again
           </button>
         </div>
@@ -261,16 +315,16 @@ export default function CalibrationClient() {
       {phase === "result" && result && (
         <div className={styles.card} style={{ textAlign: "center" }}>
           <div className={`${rs.metric} ${result.ok ? rs.pass : rs.fail}`}>
-            {Number.isFinite(result.meanErrorPx) ? `${Math.round(result.meanErrorPx)} px` : "—"}
+            {result.grade ? GRADE_TEXT[result.grade] : "—"}
           </div>
           <p style={{ marginTop: 0 }}>
-            {result.ok
-              ? "ปรับเทียบสำเร็จ / Calibration passed"
-              : "ความแม่นยำยังไม่พอ / Accuracy too low"}
+            {Number.isFinite(result.meanErrorPx)
+              ? `คลาดเคลื่อนเฉลี่ย / mean error ≈ ${result.meanErrorDeg?.toFixed(1)}° (${Math.round(result.meanErrorPx)} px)`
+              : "ตรวจความแม่นยำไม่ได้ / Accuracy could not be measured"}
             <br />
-            <span style={{ color: "var(--muted)", fontSize: 14 }}>
-              ค่าคลาดเคลื่อนเฉลี่ย (เกณฑ์ ≤ {RESEARCH_CONFIG.maxCalibrationErrorPx} px, รอปรับจากข้อมูลนำร่อง) / mean error
-              (threshold TBD)
+            <span style={{ color: "var(--muted)", fontSize: 13 }}>
+              ผ่านเมื่อ ≤ {RESEARCH_CONFIG.maxCalibrationErrorDeg}° (ค่าประมาณ รอปรับจากข้อมูลนำร่อง) · pass ≤{" "}
+              {RESEARCH_CONFIG.maxCalibrationErrorDeg}° (approximate; TBD from pilot data) · {result.pointsUsed}/{m.points.length} points
             </span>
           </p>
           <div className={styles.saveRow} style={{ justifyContent: "center" }}>
@@ -279,14 +333,14 @@ export default function CalibrationClient() {
                 เริ่มแบบทดสอบที่ 1 / Start Test 1 →
               </button>
             )}
-            {!result.ok && canRecalibrate && (
-              <button className={styles.primaryButton} onClick={start}>
-                ปรับเทียบใหม่ / Recalibrate
+            {result.grade !== "high" && canRecalibrate && pointErrors.length > 0 && (
+              <button className={result.ok ? styles.secondaryButton : styles.primaryButton} onClick={improve}>
+                ปรับเฉพาะจุดที่คลาดเคลื่อน / Improve weak spots
               </button>
             )}
-            {result.ok && (
-              <button className={styles.secondaryButton} onClick={start}>
-                ปรับเทียบใหม่ / Recalibrate
+            {canRecalibrate && (
+              <button className={styles.secondaryButton} onClick={startFull}>
+                ปรับเทียบใหม่ทั้งหมด / Recalibrate all
               </button>
             )}
             {!result.ok && !canRecalibrate && (
@@ -298,23 +352,28 @@ export default function CalibrationClient() {
         </div>
       )}
 
-      {(phase === "running" || phase === "fitting") && (
-        <div className={rs.overlay}>
-          <div className={`${rs.overlayStatus} ${noFace ? rs.overlayWarning : ""}`}>
-            {noFace
-              ? "มองไม่เห็นใบหน้า ขยับให้อยู่หน้ากล้อง / Face not visible"
-              : phase === "fitting"
-                ? "กำลังคำนวณ… / Fitting…"
-                : `มองที่จุด / Look at the dot · ${dot?.label ?? ""}`}
-          </div>
-          {dot && (
-            <div className={`${rs.dot} ${dot.collecting ? rs.dotCollecting : ""}`} style={{ left: dot.x, top: dot.y }} />
-          )}
-        </div>
+      {phase === "running" && (
+        <CalibrationStage
+          target={stage.target}
+          childMode={mode === "child"}
+          status={stage.status}
+          warning={stage.warning}
+          onReattract={stage.requestReattract}
+          onSkip={stage.requestSkip}
+          paused={stage.paused}
+          onTogglePause={stage.togglePause}
+          sound={stage.sound}
+          onSoundChange={stage.setSound}
+          onStop={stage.cancel}
+        />
       )}
 
-      <canvas ref={canvasRef} width={CAPTURE_W} height={CAPTURE_H} className={rs.hiddenCanvas} />
-      <video ref={videoRef} className={styles.hiddenVideo} muted playsInline />
+      <canvas ref={camCanvasRef} width={CAPTURE_W} height={CAPTURE_H} className={rs.hiddenCanvas} />
+      <video ref={camVideoRef} className={styles.hiddenVideo} muted playsInline />
     </div>
   );
+}
+
+function allPoints(mode: CalibrationMode): number[] {
+  return RESEARCH_CONFIG.modes[mode].points.map((_, i) => i);
 }

@@ -335,3 +335,148 @@
   pointer-events: none;
   transition: left 0.08s linear, top 0.08s linear;
 }
+
+/* ---- Calibration v2 targets ---- */
+.targetWrap {
+  position: absolute;
+  width: 0;
+  height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: left 0.45s ease, top 0.45s ease;
+}
+
+.targetWrap > * {
+  position: absolute;
+  flex-shrink: 0;
+}
+
+.targetSvg {
+  transform-origin: 50% 50%;
+}
+
+.targetLoom {
+  animation: loom 0.9s ease-out both;
+}
+
+.targetHold {
+  animation: hold 1.4s ease-in-out infinite;
+}
+
+.targetWiggle {
+  animation: wiggle 0.6s ease-in-out 2;
+}
+
+.targetReward {
+  animation: reward 0.45s ease-out both;
+}
+
+.targetRing {
+  pointer-events: none;
+}
+
+@keyframes loom {
+  0% {
+    transform: scale(3.2) rotate(-25deg);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes hold {
+  0%,
+  100% {
+    transform: scale(0.85);
+  }
+  50% {
+    transform: scale(1);
+  }
+}
+
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: scale(1.4) rotate(0deg);
+  }
+  25% {
+    transform: scale(1.6) rotate(-14deg);
+  }
+  75% {
+    transform: scale(1.6) rotate(14deg);
+  }
+}
+
+@keyframes reward {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  60% {
+    transform: scale(1.5);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .targetLoom,
+  .targetHold,
+  .targetWiggle,
+  .targetReward {
+    animation-duration: 0.01s;
+  }
+}
+
+.operatorBar {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--muted);
+  cursor: default;
+}
+
+.operatorBar button {
+  font: inherit;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.modeToggle {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.modeToggle button {
+  border: none;
+  background: var(--surface);
+  padding: 7px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.modeToggle .modeOn {
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 600;
+}
