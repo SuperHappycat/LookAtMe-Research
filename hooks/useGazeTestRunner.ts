@@ -16,20 +16,45 @@
  */
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import {
-  getGazeWorker,
-  getGazeWorkerStatus,
-  subscribeGazeWorker,
-  type WorkerSample,
-  type WorkerStatus,
-} from "@/lib/gazeWorkerClient";
+// Research app: the gaze engine is chosen behind one seam (lib/research/gaze).
+// OpenCV (original) or MediaPipe (calibrated) both deliver the same sample
+// shape, so the scoring code below and in each test is unchanged.
+import { getGazeEngine, type EngineSample, type EngineStatus } from "@/lib/research/gaze";
+import { directionFromPoint, type Box } from "@/lib/research/gaze/direction";
+import { getCalibrationState } from "@/lib/research/gaze/calibrationStore";
+import { RESEARCH_CONFIG } from "@/lib/research/config";
 
-export type { WorkerSample, WorkerStatus };
+export type WorkerSample = EngineSample;
+export type WorkerStatus = EngineStatus;
 
-const getStatusSnapshot = () => getGazeWorkerStatus().status;
-const getErrorSnapshot = () => getGazeWorkerStatus().error;
+const engine = getGazeEngine();
+const subscribeEngine = (cb: () => void) => engine.subscribe(() => cb());
+const getStatusSnapshot = () => engine.getStatus().status;
+const getErrorSnapshot = () => engine.getStatus().error;
 const getServerStatus = (): WorkerStatus => "loading";
 const getServerError = () => null;
+
+// Non-null when the active engine needs a calibration that isn't there.
+const CALIBRATION_NEEDED_MSG =
+  "ต้องปรับเทียบสายตาก่อนเริ่มทดสอบ / Calibration needed before testing. Open /calibrate first.";
+const VIEWPORT_CHANGED_MSG =
+  "ขนาดหน้าต่างเปลี่ยนไป กรุณาปรับเทียบใหม่ / The window size changed. Please recalibrate at /calibrate.";
+const noopSubscribe = () => () => {};
+const getCalibrationMsgSnapshot = (): string | null => {
+  if (!engine.requiresCalibration) return null;
+  const s = getCalibrationState();
+  if (s.state === "none") return CALIBRATION_NEEDED_MSG;
+  if (s.state === "viewport_changed") return VIEWPORT_CHANGED_MSG;
+  return s.record.ok || s.record.lowAccuracy ? null : CALIBRATION_NEEDED_MSG;
+};
+const getServerCalibrationMsg = () => null;
+
+function stimulusBoxes(refs: React.RefObject<HTMLVideoElement | null>[]): Box[] {
+  return refs
+    .map((r) => r.current?.getBoundingClientRect())
+    .filter((r): r is DOMRect => !!r)
+    .map((r) => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom }));
+}
 
 export const DETECTION_INTERVAL_MS = 100;
 
@@ -68,21 +93,20 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
 
   // Init status comes from the tab-wide shared worker; a frame-processing
   // error during this page's run is tracked locally on top of it.
-  const sharedStatus = useSyncExternalStore(subscribeGazeWorker, getStatusSnapshot, getServerStatus);
-  const sharedError = useSyncExternalStore(subscribeGazeWorker, getErrorSnapshot, getServerError);
+  const sharedStatus = useSyncExternalStore(subscribeEngine, getStatusSnapshot, getServerStatus);
+  const sharedError = useSyncExternalStore(subscribeEngine, getErrorSnapshot, getServerError);
+  const calibrationMsg = useSyncExternalStore(noopSubscribe, getCalibrationMsgSnapshot, getServerCalibrationMsg);
   const [frameError, setFrameError] = useState<string | null>(null);
-  const workerStatus: WorkerStatus = frameError ? "error" : sharedStatus;
-  const loadError = frameError ?? sharedError;
+  const workerStatus: WorkerStatus = frameError || calibrationMsg ? "error" : sharedStatus;
+  const loadError = frameError ?? calibrationMsg ?? sharedError;
   const [running, setRunning] = useState(false);
   const [remainingSec, setRemainingSec] = useState(testDurationMs / 1000);
   const [liveStatus, setLiveStatus] = useState<WorkerSample | null>(null);
   const [soundBlocked, setSoundBlocked] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
-  const workerRef = useRef<Worker | null>(null);
-  // At most one frame is in flight to the worker at a time, so we never
-  // pay for a getImageData() readback that the worker would just drop.
-  const frameInFlightRef = useRef(false);
+  // At most one frame is in flight at a time (the engine refuses extra
+  // frames while busy), so we never pay for a readback that'd be dropped.
   const streamRef = useRef<MediaStream | null>(null);
 
   const runningRef = useRef(false);
@@ -121,19 +145,26 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
   // importScripts()-based UMD loader works unmodified. It's shared across
   // test pages so opencv.js only loads once per tab.)
   useEffect(() => {
-    workerRef.current = getGazeWorker();
-    frameInFlightRef.current = false;
+    engine.preload();
 
-    const unsubscribe = subscribeGazeWorker((msg) => {
-      if (msg.type === "skipped") {
-        frameInFlightRef.current = false;
-      } else if (msg.type === "error") {
-        frameInFlightRef.current = false;
-        console.error("gaze-worker error:", msg.message);
-        if (getGazeWorkerStatus().status === "ready") setFrameError(msg.message);
+    const unsubscribe = engine.subscribe((msg) => {
+      if (msg.type === "error") {
+        console.error(`gaze engine (${engine.name}) error:`, msg.message);
+        if (engine.getStatus().status === "ready") setFrameError(msg.message);
       } else if (msg.type === "result") {
-        frameInFlightRef.current = false;
-        const sample = msg.sample;
+        // A calibrated point (MediaPipe) becomes Left/Center/Right from
+        // where the stimulus videos sit on screen; OpenCV samples pass
+        // through unchanged.
+        const sample: WorkerSample = msg.sample.point
+          ? {
+              ...msg.sample,
+              direction: directionFromPoint(
+                msg.sample.point,
+                stimulusBoxes(videoRefsRef.current),
+                RESEARCH_CONFIG.aoiMarginPx,
+              ),
+            }
+          : msg.sample;
         // Skip the re-render when nothing visible changed.
         setLiveStatus((prev) =>
           prev &&
@@ -152,7 +183,6 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
 
     return () => {
       unsubscribe();
-      workerRef.current = null;
     };
   }, []);
 
@@ -230,24 +260,11 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
   }, [webcamVideoRef, previewCanvasRef]);
 
   const runDetectionTick = useCallback(() => {
-    const worker = workerRef.current;
     const canvas = previewCanvasRef.current;
-    if (!worker || !canvas || frameInFlightRef.current) return;
-    // willReadFrequently keeps the canvas CPU-backed, so getImageData()
-    // below doesn't force a slow GPU readback every tick.
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) return;
-
-    // Ship one RGBA frame to the worker as a transferable buffer
-    // (zero-copy). Skipped while a previous frame is still being
-    // processed (the worker replies to every frame), so this is safe to
-    // call on a fixed interval regardless of how long detection takes.
-    frameInFlightRef.current = true;
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    worker.postMessage(
-      { type: "frame", width: canvas.width, height: canvas.height, buffer: imageData.data.buffer },
-      [imageData.data.buffer],
-    );
+    if (!canvas) return;
+    // The engine ignores the frame if it is still busy with the previous
+    // one, so this is safe to call on a fixed interval.
+    engine.submitFrame(canvas, performance.now());
   }, [previewCanvasRef]);
 
   const start = useCallback(async (): Promise<boolean> => {
@@ -287,7 +304,7 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
       return false;
     }
 
-    workerRef.current?.postMessage({ type: "reset" });
+    engine.reset();
     setFrameError(null);
     runningRef.current = true;
     setRunning(true);
