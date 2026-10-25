@@ -149,7 +149,7 @@ export interface StudyDetail {
   sites: { orgId: string; name: string; status: SiteRowDb["status"]; joinedAt: string | null; shareRowData: boolean }[];
   myShareRowData: boolean;
   /** Lead admins only. Codes are never returned (only their hash is stored). */
-  invites: { id: string; createdAt: string; expiresAt: string; usedAt: string | null; usedBy: string | null }[] | null;
+  invites: { id: string; createdAt: string; expiresAt: string; expired: boolean; usedAt: string | null; usedBy: string | null }[] | null;
 }
 
 export async function studyDetail(d: StudyData, userId: string, studyIdRaw: unknown, orgIdRaw: unknown): Promise<StudyDetail> {
@@ -159,6 +159,7 @@ export async function studyDetail(d: StudyData, userId: string, studyIdRaw: unkn
   const { study, sites, mine, role } = await studyFor(d, studyId, orgId);
   const visible = role === "lead" ? sites : sites.filter((s) => s.org_id === orgId || s.org_id === study.lead_org_id);
   const invites = role === "lead" && myRole === "admin" ? await d.invites(studyId) : null;
+  const now = Date.now();
   const names = await d.orgNames([
     ...new Set([study.lead_org_id, ...visible.map((s) => s.org_id), ...(invites ?? []).flatMap((i) => (i.used_by_org ? [i.used_by_org] : []))]),
   ]);
@@ -182,6 +183,7 @@ export async function studyDetail(d: StudyData, userId: string, studyIdRaw: unkn
         id: i.id,
         createdAt: i.created_at,
         expiresAt: i.expires_at,
+        expired: new Date(i.expires_at).getTime() <= now,
         usedAt: i.used_at,
         usedBy: i.used_by_org ? (names.get(i.used_by_org) ?? "") : null,
       })) ?? null,

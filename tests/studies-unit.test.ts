@@ -390,7 +390,7 @@ test("detail and list: a site sees only the lead and itself; invites (no codes) 
   const lead = await studyDetail(d, "leadAdmin", STUDY, LEAD);
   assert.equal(lead.role, "lead");
   assert.equal(lead.sites.length, 3);
-  assert.deepEqual(lead.invites, [{ id: "i1", createdAt: "2026-10-01", expiresAt: "2026-10-15", usedAt: "2026-10-02", usedBy: "Site Hospital" }]);
+  assert.deepEqual(lead.invites, [{ id: "i1", createdAt: "2026-10-01", expiresAt: "2026-10-15", expired: true, usedAt: "2026-10-02", usedBy: "Site Hospital" }]);
   assert.equal((await studyDetail(d, "leadStaff", STUDY, LEAD)).invites, null);
 
   const site = await studyDetail(d, "siteStaff", STUDY, SITE);

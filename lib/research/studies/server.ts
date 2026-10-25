@@ -13,6 +13,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getServiceClient, HttpError } from "../supabase/server";
 import type { MemberRole, PlanKey } from "../plans";
 import { STUDIES_CONFIG } from "./config";
+import { studyErrorFor } from "./messages";
 import { StudyError, type StudyData, type StudyRowDb } from "./service";
 import type { SummarySessionRow } from "./aggregate";
 import type { ConsentRow, ExportSessionRow } from "./pseudonym";
@@ -138,19 +139,10 @@ export function serviceStudyData(): StudyData {
   };
 }
 
-/** Database error codes from the study RPCs → HTTP status + Thai/English message. */
+/** Database error codes from the study RPCs → HttpError (unknown errors become a plain 500). */
 export function rpcErrorToHttp(message: string): HttpError {
-  const map: [string, number, string][] = [
-    ["feature_not_in_plan", 403, "แผนนี้ไม่มีโครงการหลายสถานที่ หรือหมดอายุ / Multi-site studies need an active Hospital plan."],
-    ["too_many_attempts", 429, "ลองรหัสผิดหลายครั้งเกินไป กรุณารอ 1 ชั่วโมง / Too many wrong codes. Try again in an hour."],
-    ["too_many_invites", 409, "มีรหัสเชิญที่ยังไม่ใช้มากเกินไป / Too many unused invite codes. Revoke some first."],
-    ["lead_cannot_leave", 409, "ผู้นำโครงการออกจากโครงการไม่ได้ / The lead site can't leave its own study."],
-    ["not_a_site", 409, "องค์กรนี้ไม่ได้เป็นสถานที่ในโครงการ / This organization is not an active site of the study."],
-    ["bad_name", 400, "กรุณาใส่ชื่อโครงการ (ไม่เกิน 200 ตัวอักษร) / Please enter a study name (up to 200 characters)."],
-    ["not_allowed", 403, "ไม่มีสิทธิ์ทำรายการนี้ / You don't have permission for this."],
-  ];
-  for (const [code, status, text] of map) if (message.includes(code)) return new HttpError(status, text);
-  return new HttpError(500, "Server error.");
+  const m = studyErrorFor(message);
+  return m ? new HttpError(m.status, m.text) : new HttpError(500, "Server error.");
 }
 
 /** Calls an RPC as the caller (anon key + the caller's access token), so RLS and auth.uid() apply. */
