@@ -73,7 +73,7 @@ export function firstCompletedSession<T extends StatsSession>(sessions: T[]): T 
  * The diagnosis that counts: the most recent record (by diagnosis date, then by when it was entered).
  * Diagnoses can't be edited, so a correction or a later final diagnosis is a new row.
  */
-export function currentDiagnosis<T extends StatsDiagnosis>(list: T[]): T | null {
+export function currentDiagnosis<T extends Pick<StatsDiagnosis, "diagnosed_on" | "created_at">>(list: T[]): T | null {
   let best: T | null = null;
   for (const d of list) {
     if (!best) {

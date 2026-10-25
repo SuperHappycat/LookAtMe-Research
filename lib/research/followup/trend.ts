@@ -37,6 +37,8 @@ export interface TrendLayout {
   height: number;
   pad: { left: number; right: number; top: number; bottom: number };
   sessions: TrendSession[];
+  /** x position of each session in `sessions`. */
+  xs: number[];
   series: Record<TrendKey, TrendPoint[]>;
   xTicks: { x: number; label: string }[];
   yTicks: { y: number; label: string }[];
@@ -87,7 +89,7 @@ export function trendLayout(
     xTicks.push(last);
   }
   const yTicks = [0, 25, 50, 75, 100].map((v) => ({ y: yOf(v), label: String(v) }));
-  return { width, height, pad, sessions, series, xTicks, yTicks };
+  return { width, height, pad, sessions, xs: ts.map(xOf), series, xTicks, yTicks };
 }
 
 export function pathD(points: TrendPoint[]): string {
