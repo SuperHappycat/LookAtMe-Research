@@ -5,6 +5,10 @@
  * 1. computes the session quality score,
  * 2. uploads the gaze CSV to Supabase Storage (gaze/<org>/<session>.csv),
  * 3. calls complete_session (scores, quality, retest flag; quota used only if completed).
+ * Offline (spec §5.4): when the screening was started offline (sessionId ""), the device is
+ * offline, or the save fails for lack of a connection, the same data and the gaze CSV go into
+ * the device's upload queue (lib/research/queue.ts) and are sent later by the
+ * "offline_session" uploader (start_session → gaze CSV → complete_session).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -19,9 +23,15 @@ import { getGazeLog, gazeRowsToCsv } from "@/lib/research/gazeLog";
 import { computeQuality, QUALITY_CONFIG, REASON_TEXT, type QualityResult } from "@/lib/research/quality";
 import { getActiveModel, getCalibrationState } from "@/lib/research/gaze/calibrationStore";
 import { RESEARCH_CONFIG } from "@/lib/research/config";
+import { enqueue, linkedSessionId, onChange, pending } from "@/lib/research/queue";
+import { isNetworkError } from "@/lib/research/offline/rules";
+import type { SessionItem } from "@/lib/research/offline/syncSession";
 import EndCheck, { type EndCheckResult } from "./EndCheck";
+import offlineCss from "./offline/offline.module.css";
 
-type SaveState = "idle" | "saving" | "saved" | "error";
+type SaveState = "idle" | "saving" | "saved" | "queued" | "error";
+
+const deviceOffline = () => typeof navigator !== "undefined" && navigator.onLine === false;
 
 export default function ResearchSaveCard({
   session,
@@ -36,6 +46,8 @@ export default function ResearchSaveCard({
   const [status, setStatus] = useState<string | null>(null);
   const [quality, setQuality] = useState<QualityResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Once a queued session has been uploaded: its server id. */
+  const [syncedId, setSyncedId] = useState<string | null>(null);
   const started = useRef(false);
   const complete = !!(session.test1 && session.test2 && session.test3);
   // MediaPipe sessions get a short end-of-session accuracy check before saving.
@@ -64,15 +76,9 @@ export default function ResearchSaveCard({
       });
       setQuality(q);
 
-      const sb = getSupabase();
-      const csv = gazeRowsToCsv(ctx.sessionId, log.rows);
-      const path = `${ctx.orgId}/${ctx.sessionId}.csv`;
-      const up = await sb.storage.from("gaze").upload(path, new Blob([csv], { type: "text/csv" }), {
-        upsert: true,
-        contentType: "text/csv",
-      });
-      if (up.error) throw up.error;
-
+      const offline = !!ctx.offline || !ctx.sessionId || deviceOffline();
+      // Offline the server id isn't known yet: the CSV carries the clientSessionId, swapped at sync.
+      const csv = gazeRowsToCsv(offline ? ctx.clientSessionId : ctx.sessionId, log.rows);
       const data = {
         overall_score: result.overallScore,
         risk_level: result.riskLevel,
@@ -106,15 +112,60 @@ export default function ResearchSaveCard({
         },
         quality: { ...q, thresholds: QUALITY_CONFIG },
       };
-      const rpc = await sb.rpc("complete_session", { p_session: ctx.sessionId, p_data: data, p_gaze_path: path });
-      if (rpc.error) throw rpc.error;
-      setStatus(rpc.data as string);
-      setState("saved");
+
+      const queueIt = async () => {
+        const item: SessionItem = {
+          // one queue item per screening, so pressing save again can't duplicate it
+          id: `session-${ctx.clientSessionId}`,
+          kind: "offline_session",
+          createdAt: new Date().toISOString(),
+          orgId: ctx.orgId,
+          attempts: 0,
+          clientSessionId: ctx.clientSessionId,
+          childId: ctx.childId,
+          startedOffline: offline,
+          payload: { engine: ctx.engine, startedAt: ctx.startedAt, completeData: data, gazeCsv: csv },
+        };
+        await enqueue(item);
+        setState("queued");
+      };
+      if (offline) return await queueIt();
+
+      try {
+        const sb = getSupabase();
+        const path = `${ctx.orgId}/${ctx.sessionId}.csv`;
+        const up = await sb.storage.from("gaze").upload(path, new Blob([csv], { type: "text/csv" }), {
+          upsert: true,
+          contentType: "text/csv",
+        });
+        if (up.error) throw up.error;
+        const rpc = await sb.rpc("complete_session", { p_session: ctx.sessionId, p_data: data, p_gaze_path: path });
+        if (rpc.error) throw rpc.error;
+        setStatus(rpc.data as string);
+        setState("saved");
+      } catch (err) {
+        // Lost the connection while saving: keep the result on the device instead of failing.
+        if (isNetworkError(err)) return await queueIt();
+        throw err;
+      }
     } catch (err) {
       setError(friendlyError(err));
       setState("error");
     }
   }, [ctx, ready, result, session, endCheck]);
+
+  // While queued, notice when the queue has uploaded this screening.
+  useEffect(() => {
+    if (state !== "queued" || !ctx) return;
+    const check = async () => {
+      const still = (await pending()).some((i) => i.id === `session-${ctx.clientSessionId}`);
+      if (still) return;
+      const id = await linkedSessionId(ctx.clientSessionId);
+      if (id) setSyncedId(id);
+    };
+    void check();
+    return onChange(() => void check());
+  }, [state, ctx]);
 
   useEffect(() => {
     if (started.current || !ctx || !ready || !supabaseConfigured()) return;
@@ -176,6 +227,46 @@ export default function ResearchSaveCard({
           </ul>
           ผลครั้งนี้ไม่นับโควตา / This session does not use quota.
         </div>
+      )}
+      {state === "queued" && (
+        <>
+          {syncedId ? (
+            <p className={styles.successText}>ส่งข้อมูลแล้ว ✓ / Uploaded ✓</p>
+          ) : (
+            <p className={offlineCss.saved} role="status">
+              <strong>บันทึกไว้ในเครื่อง รอส่งข้อมูล / Saved on this device, waiting to upload</strong>
+              <br />
+              ระบบจะส่งข้อมูลให้อัตโนมัติเมื่อกลับมาออนไลน์ / It will upload automatically when the device is back
+              online.
+            </p>
+          )}
+          <div className={styles.saveRow}>
+            {syncedId && (
+              <button className={styles.primaryButton} onClick={() => router.push(`/r/sessions/${syncedId}`)}>
+                ดูรายละเอียด / View session
+              </button>
+            )}
+            <button
+              className={syncedId ? styles.secondaryButton : styles.primaryButton}
+              onClick={() => {
+                endResearchScreening();
+                router.push("/r/offline");
+              }}
+            >
+              ข้อมูลออฟไลน์ / Offline data
+            </button>
+            <button
+              className={styles.secondaryButton}
+              onClick={() => {
+                const childId = ctx.childId;
+                endResearchScreening();
+                router.push(deviceOffline() ? "/r/offline" : `/r/children/${childId}`);
+              }}
+            >
+              กลับหน้าเด็ก / Back to child
+            </button>
+          </div>
+        </>
       )}
       {state === "saved" && (
         <>

@@ -432,3 +432,99 @@
 .sessionRow strong {
   font-size: 15px;
 }
+
+/* ======================================================================
+   Phase 5 tablet (agent E): 768–1024 px touch tablets, portrait and
+   landscape. Layout only; the look stays the same. Tap targets ≥ 44 px.
+   ====================================================================== */
+@media (max-width: 1024px) {
+  .page {
+    padding: 24px 16px 56px;
+  }
+
+  .pageNarrow {
+    padding: 28px 16px 56px;
+  }
+
+  .card {
+    padding: 20px 18px;
+  }
+
+  /* Test 1: keep the two stimulus videos side by side (left/right gaze) on a tablet,
+     shrinking them rather than stacking them, so both stay on screen together. */
+  .videoRow {
+    gap: 12px;
+  }
+
+  .videoRow > * {
+    min-width: 0;
+  }
+
+  .videoPanel {
+    border-width: 4px;
+  }
+
+  .videoPanel video {
+    max-height: 60vh;
+  }
+
+  .videoPanelSingle video {
+    max-height: 70vh;
+  }
+
+  .timer {
+    margin-top: 12px;
+  }
+
+  /* Smaller camera preview so it doesn't cover the stimulus video. */
+  .cornerPreviewWrap {
+    right: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .previewCanvas {
+    width: 160px;
+    height: 120px;
+    border-width: 3px;
+  }
+
+  .navButton {
+    width: min(260px, 100%);
+  }
+}
+
+@media (min-width: 600px) and (max-width: 1024px) {
+  .videoRow:not(.videoRowOffscreen) {
+    flex-wrap: nowrap;
+  }
+}
+
+/* Portrait tablet: less height, so the videos must not push the timer off screen. */
+@media (max-width: 1024px) and (orientation: portrait) {
+  .videoPanel video {
+    max-height: 40vh;
+  }
+
+  .videoPanelSingle video {
+    max-height: 55vh;
+  }
+}
+
+@media (pointer: coarse) {
+  .primaryButton,
+  .secondaryButton,
+  .dangerButton {
+    min-height: 44px;
+  }
+
+  .field input,
+  .field select,
+  .inlineSelectRow select {
+    min-height: 44px;
+    font-size: 16px; /* stops iOS zooming into the field */
+  }
+
+  .navButton {
+    min-height: 58px;
+  }
+}

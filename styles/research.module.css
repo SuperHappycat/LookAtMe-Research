@@ -480,3 +480,105 @@
   color: var(--primary);
   font-weight: 600;
 }
+
+/* ======================================================================
+   Phase 5 tablet (agent E): 768–1024 px touch tablets, portrait and
+   landscape. Layout only; the look stays the same. Tap targets ≥ 44 px.
+   ====================================================================== */
+@media (max-width: 1024px) {
+  .topbarInner {
+    padding: 8px 16px;
+    gap: 10px;
+  }
+
+  .topbarRight {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+
+  .orgBar {
+    padding: 0 16px 8px;
+  }
+
+  .wide {
+    padding: 20px 16px 56px;
+  }
+
+  .replayStage {
+    flex-wrap: wrap;
+    padding: 12px;
+  }
+
+  /* Calibration operator bar: wraps instead of running off the screen. */
+  .operatorBar {
+    flex-wrap: wrap;
+    justify-content: center;
+    width: max-content;
+    max-width: calc(100vw - 24px);
+    border-radius: 22px;
+    row-gap: 8px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (pointer: coarse) {
+  .navLink,
+  .navActive {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 14px;
+  }
+
+  .linkButton {
+    min-height: 44px;
+    padding: 0 6px;
+  }
+
+  .select,
+  .textInput,
+  .field input,
+  .field select {
+    min-height: 44px;
+    font-size: 16px; /* stops iOS zooming into the field */
+  }
+
+  .checkLine input[type="checkbox"],
+  .checkLine input[type="radio"] {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+
+  .table th,
+  .table td {
+    padding: 12px 10px;
+  }
+
+  .table td button,
+  .table td a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .operatorBar button {
+    min-height: 44px;
+    padding: 6px 14px;
+  }
+
+  .operatorBar input[type="checkbox"] {
+    width: 24px;
+    height: 24px;
+  }
+
+  .operatorBar input[type="range"] {
+    min-height: 44px;
+    width: 120px !important;
+  }
+
+  .modeToggle button {
+    min-height: 44px;
+    padding: 8px 18px;
+  }
+}
