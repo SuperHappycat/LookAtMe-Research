@@ -1,0 +1,91 @@
+/* Gaze check page (/r/gaze-check). Shares .overlay / .operatorBar from research.module.css. */
+
+.stage {
+  cursor: default;
+  overflow: hidden;
+}
+
+.gazeDot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border-radius: 50%;
+  background: rgba(37, 99, 235, 0.45);
+  border: 2px solid rgba(37, 99, 235, 0.85);
+  box-shadow: 0 0 18px rgba(37, 99, 235, 0.35);
+  pointer-events: none;
+  z-index: 3;
+  /* Points arrive every ~100 ms; glide between them. */
+  transition: transform 0.1s linear, opacity 0.2s ease;
+}
+
+.gazeDotLost {
+  opacity: 0.2;
+}
+
+.trailDot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 50%;
+  background: rgb(37, 99, 235);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.target {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px dashed var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+.targetStar {
+  font-size: 34px;
+  line-height: 1;
+  color: var(--border-strong);
+  transition: transform 0.3s ease, color 0.3s ease;
+}
+
+.targetLit {
+  border-style: solid;
+  border-color: #f59e0b;
+  background: rgba(253, 230, 138, 0.35);
+}
+
+.targetLit .targetStar {
+  color: #f59e0b;
+  transform: scale(1.6);
+}
+
+.targetFill {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(245, 158, 11, 0.25);
+}
+
+.counter {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.operatorInfo {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

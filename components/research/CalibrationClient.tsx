@@ -379,6 +379,11 @@ export default function CalibrationClient() {
                 เริ่มแบบทดสอบที่ 1 / Start Test 1 →
               </button>
             )}
+            {result.ok && (
+              <button className={styles.secondaryButton} onClick={() => router.push("/r/gaze-check?from=calibrate")}>
+                ดูว่ามองตรงไหน / See where they look →
+              </button>
+            )}
             {result.grade !== "high" && canRecalibrate && weakPoints.length > 0 && (
               <button className={result.ok ? styles.secondaryButton : styles.primaryButton} onClick={improve}>
                 ปรับเฉพาะจุดที่คลาดเคลื่อน / Improve weak spots
