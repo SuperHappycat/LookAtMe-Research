@@ -27,6 +27,7 @@ import {
   type Test1Results as ScoredTest1Results,
 } from "@/lib/vision/test1Scoring";
 import { getSession, saveTest1Results } from "@/lib/sessionState";
+import { getGazeEngine } from "@/lib/research/gaze";
 
 const TEST_DURATION_MS = 20000;
 
@@ -141,6 +142,15 @@ export default function Test1Client() {
           <button className={styles.primaryButton} onClick={handleStart}>
             เริ่มทดสอบ / Start Test (20s)
           </button>
+          {getGazeEngine().name === "mediapipe" && (
+            <button
+              className={styles.secondaryButton}
+              style={{ marginLeft: 10 }}
+              onClick={() => router.push("/r/gaze-check?from=test1")}
+            >
+              ดูว่ามองตรงไหน / See where they look
+            </button>
+          )}
           {runner.cameraError && (
             <p className={styles.errorText} style={{ marginTop: 12, marginBottom: 0 }}>
               {runner.cameraError}
