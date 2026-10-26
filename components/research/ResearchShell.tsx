@@ -226,6 +226,7 @@ export default function ResearchShell({ children }: { children: React.ReactNode 
     ...(plan && planHas(plan, "diagnosis_follow_up") ? [{ href: "/r/stats", label: "ความแม่นยำ / Accuracy" }] : []),
     ...(plan && planHas(plan, "multi_site") ? [{ href: "/r/studies", label: "โครงการวิจัย / Studies" }] : []),
     { href: "/r/offline", label: "ออฟไลน์ / Offline" },
+    { href: "/r/demo", label: "สาธิต / Demo" },
     ...(active?.role === "admin" ? [{ href: "/r/team", label: "ทีม / Team" }] : []),
     ...(active?.role === "admin" ? [{ href: "/r/settings", label: "ตั้งค่า / Settings" }] : []),
     ...(isPlatformAdmin ? [{ href: "/r/admin", label: "LookAtMe admin" }] : []),
