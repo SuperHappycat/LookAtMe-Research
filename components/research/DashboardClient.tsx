@@ -11,7 +11,8 @@ import styles from "@/styles/shared.module.css";
 import rs from "@/styles/research.module.css";
 import { friendlyError, getSupabase } from "@/lib/research/supabase/client";
 import { ageInMonths } from "@/lib/research/screening";
-import { downloadText, gazeExportCsv, sessionsCsv, type ExportSession } from "@/lib/research/exportCsv";
+import { downloadBytes, downloadText, gazeExportCsv, sessionsCsv, type ExportSession } from "@/lib/research/exportCsv";
+import { statsExportZip } from "@/lib/research/exports/statsExport";
 import { useResearch } from "./ResearchShell";
 import RiskBadge from "./RiskBadge";
 
@@ -35,7 +36,7 @@ export default function DashboardClient() {
     const { data, error: err } = await getSupabase()
       .from("sessions")
       .select(
-        "id, started_at, completed_at, status, engine, overall_score, risk_level, level1_score, level2_score, level3_score, quality_score, face_found_pct, retest_needed, calibration_error_px, low_accuracy, child:children(code, birth_month, sex)",
+        "id, started_at, completed_at, status, engine, overall_score, risk_level, level1_score, level2_score, level3_score, quality_score, face_found_pct, retest_needed, calibration_error_px, low_accuracy, blind, child:children(code, birth_month, sex)",
       )
       .eq("org_id", orgId)
       .order("started_at", { ascending: false })
@@ -80,6 +81,37 @@ export default function DashboardClient() {
     await getSupabase().rpc("log_action", { p_org: orgId, p_action: "export_sessions_csv", p_target: `${shown.length} rows` });
     downloadText(`lookatme-sessions-${today()}.csv`, sessionsCsv(shown));
     setExporting(null);
+  }
+
+  async function exportStats() {
+    if (!orgId) return;
+    setExporting("stats");
+    setError(null);
+    try {
+      // Same audit action as the sessions CSV: it is the same rows, coded for SPSS / Stata / REDCap.
+      await getSupabase().rpc("log_action", {
+        p_org: orgId,
+        p_action: "export_sessions_csv",
+        p_target: `stats zip (SPSS/Stata/REDCap): ${shown.length} rows`,
+      });
+      const filters = [
+        from && `from ${from}`,
+        to && `to ${to}`,
+        risk !== "all" && `risk = ${risk}`,
+        status !== "all" && `status = ${status}`,
+        code.trim() && `code contains "${code.trim()}"`,
+      ].filter(Boolean);
+      const zip = statsExportZip(shown, {
+        viewerIsAdmin: isAdmin,
+        generatedAt: new Date(),
+        filterNote: filters.length ? filters.join("; ") : "none (all sessions)",
+      });
+      downloadBytes(`lookatme-stats-${today()}.zip`, zip);
+    } catch (err) {
+      setError(friendlyError(err));
+    } finally {
+      setExporting(null);
+    }
   }
 
   async function exportGaze() {
@@ -163,6 +195,9 @@ export default function DashboardClient() {
           <div className={styles.saveRow} style={{ marginTop: 14 }}>
             <button className={styles.primaryButton} onClick={exportSessions} disabled={!!exporting || !shown.length}>
               {exporting === "sessions" ? "…" : "ส่งออกสรุป (CSV) / Export sessions"}
+            </button>
+            <button className={styles.secondaryButton} onClick={exportStats} disabled={!!exporting || !shown.length}>
+              {exporting === "stats" ? "…" : "ส่งออกสำหรับโปรแกรมสถิติ / Export for SPSS · Stata · REDCap"}
             </button>
             <button className={styles.secondaryButton} onClick={exportGaze} disabled={!!exporting || !shown.length}>
               {exporting === "gaze" ? "กำลังรวมไฟล์… / Building…" : "ส่งออกข้อมูลการมองทั้งหมด / Export all gaze data"}
