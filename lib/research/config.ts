@@ -91,4 +91,18 @@ export const RESEARCH_CONFIG = {
   smoothingAlpha: 0.5,
   /** A gaze point within this many px outside a stimulus video still counts as looking at it. */
   aoiMarginPx: 40,
+
+  // ---- Gaze check page (/r/gaze-check; demo / pilot only, nothing saved) ----
+  gazeCheck: {
+    /** 3×3 target positions as fractions of the window width/height. */
+    gridFractions: [0.15, 0.5, 0.85] as ReadonlyArray<number>,
+    /** Target radius as a fraction of the gap between neighbouring targets (smaller window side). */
+    targetRadiusOfGap: 0.4,
+    /** Time the gaze dot must stay in a target before it lights up. */
+    dwellMs: 1000,
+    /** Blinks / brief exits shorter than this do not break a dwell. */
+    maxGapMs: 300,
+    /** Number of past points drawn in the fading trail (one per detection frame, ~100 ms). */
+    trailLength: 8,
+  },
 } as const;
