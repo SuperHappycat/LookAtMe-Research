@@ -97,3 +97,15 @@ export function orderPoints<T>(points: readonly T[], isCentre: (p: T) => boolean
   }
   return [...centre, ...rest];
 }
+
+/**
+ * Hint when the face sits near the edge of the camera picture or too close (landmarks get worse; real
+ * data had the nose at 92% of the picture height). px/py: nose position 0..1; s: face width / picture width.
+ */
+export function facePositionHint(f: { px: number; py: number; s: number }): string | null {
+  if (f.py > 0.8) return "ใบหน้าอยู่ต่ำเกินไป ยกจอขึ้นหรือให้นั่งสูงขึ้น / Face is low in the camera: tilt the screen forward or raise the seat";
+  if (f.py < 0.2) return "ใบหน้าอยู่สูงเกินไป เอียงจอไปด้านหลัง / Face is high in the camera: tilt the screen back";
+  if (f.px < 0.2 || f.px > 0.8) return "ให้อยู่กลางจอ / Move to the middle, in front of the camera";
+  if (f.s > 0.4) return "ใกล้จอเกินไป ถอยห่างเล็กน้อย / Too close: sit a little further back";
+  return null;
+}

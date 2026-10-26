@@ -32,7 +32,10 @@ export interface FeatureVector {
 
 export const FEATURE_KEYS = ["ex", "ey", "hx", "hy", "px", "py", "s", "yaw", "pitch"] as const;
 
-export type GazeDesign = "compact" | "full";
+export type GazeDesign = "eyes" | "compact" | "compact_int" | "full";
+
+/** Designs tried by fitBestModel(), simplest first. */
+export const CANDIDATE_DESIGNS: readonly GazeDesign[] = ["eyes", "compact", "compact_int"];
 
 export interface GazeModel {
   /** Missing on records saved before v3 (= "full"). */
@@ -60,6 +63,11 @@ function compactRows(z: number[]): { x: number[]; y: number[] } {
 
 function rowsFor(design: GazeDesign, z: number[]): { x: number[]; y: number[] } {
   if (design === "compact") return compactRows(z);
+  const [ex, ey, , , px, py, , yaw, pitch] = z;
+  // Eyes only, with the eye-x × eye-y term: looking down shrinks the iris's sideways offset (seen in real
+  // data), so x depends on ey too. Best when the head stays still.
+  if (design === "eyes") return { x: [1, ex, ey, ex * ey], y: [1, ey, ex, ex * ey] };
+  if (design === "compact_int") return { x: [1, ex, ey, ex * ey, yaw, px], y: [1, ey, ex, ex * ey, pitch, py] };
   const r = designRow(z);
   return { x: r, y: r };
 }
@@ -162,4 +170,48 @@ export function leaveOnePointOut(
     errors.push(Math.hypot(median(preds.map((q) => q.x)) - p.x, median(preds.map((q) => q.y)) - p.y));
   });
   return errors;
+}
+
+export interface BestModel {
+  model: GazeModel;
+  design: GazeDesign;
+  /** Leave-one-point-out error (px) of the chosen design, per point, in input order. */
+  looErrors: number[];
+  /** Mean leave-one-out error (px) of every design tried (for the calibration data download). */
+  tried: Partial<Record<GazeDesign, number>>;
+}
+
+/**
+ * Fits each candidate design and keeps the one whose leave-one-point-out error over all points is lowest:
+ * a still adult gets the eyes-only model, a child who moves gets the head terms. Falls back to "compact"
+ * when every candidate fails.
+ */
+export function fitBestModel(
+  points: { x: number; y: number; features: FeatureVector[] }[],
+  lambda: number,
+  designs: readonly GazeDesign[] = CANDIDATE_DESIGNS,
+): BestModel {
+  const tried: Partial<Record<GazeDesign, number>> = {};
+  let best: { design: GazeDesign; errs: number[]; mean: number } | null = null;
+  for (const design of designs) {
+    let errs: number[];
+    try {
+      errs = leaveOnePointOut(points, lambda, () => true, design);
+    } catch {
+      continue;
+    }
+    const finite = errs.filter(Number.isFinite);
+    if (finite.length < Math.ceil(points.length / 2)) continue;
+    const mean = finite.reduce((a, b) => a + b, 0) / finite.length;
+    tried[design] = Math.round(mean);
+    if (!best || mean < best.mean) best = { design, errs, mean };
+  }
+  const design = best?.design ?? "compact";
+  const all = points.flatMap((p) => p.features.map((features) => ({ features, x: p.x, y: p.y })));
+  return {
+    model: fitGazeModel(all, lambda, design),
+    design,
+    looErrors: best?.errs ?? points.map(() => Infinity),
+    tried,
+  };
 }

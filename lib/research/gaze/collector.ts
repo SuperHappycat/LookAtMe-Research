@@ -35,6 +35,8 @@ export interface CollectOptions {
   onProgress: (fraction: number) => void;
   onReattract: () => void;
   onFaceVisible: (visible: boolean) => void;
+  /** Every detected frame's features (for the face-position hint). Optional. */
+  onFrame?: (f: FeatureVector) => void;
 }
 
 export interface CollectResult {
@@ -75,6 +77,7 @@ export async function collectFixation(o: CollectOptions): Promise<CollectResult>
     const f = canvas ? detectFeatures(canvas) : null;
     if (f && !isBlink(f)) {
       missed = 0;
+      o.onFrame?.(f.features);
       recent.push(f.features);
       if (recent.length > 12) recent.shift();
       if (isFixating(recent, RESEARCH_CONFIG.fixationWindow, RESEARCH_CONFIG.fixationMaxSpread)) {

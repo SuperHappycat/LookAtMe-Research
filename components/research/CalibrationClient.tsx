@@ -22,7 +22,7 @@ import styles from "@/styles/shared.module.css";
 import rs from "@/styles/research.module.css";
 import { RESEARCH_CONFIG } from "@/lib/research/config";
 import { getGazeEngine } from "@/lib/research/gaze";
-import { fitGazeModel, leaveOnePointOut, median, predictGaze, type FeatureVector, type GazeModel } from "@/lib/research/gaze/regression";
+import { fitBestModel, median, predictGaze, type FeatureVector, type GazeDesign, type GazeModel } from "@/lib/research/gaze/regression";
 import {
   chooseMode,
   gradeDeg,
@@ -70,6 +70,8 @@ export default function CalibrationClient() {
   const [attempts, setAttempts] = useState(0);
   /** Training samples per calibration point index, kept so "improve weak spots" can replace a few. */
   const trainRef = useRef<Map<number, FeatureVector[]>>(new Map());
+  /** Which model design was chosen (and the others' errors), for the data download. */
+  const fitInfoRef = useRef<{ design: GazeDesign; tried: Partial<Record<GazeDesign, number>> } | null>(null);
 
   useEffect(() => {
     engine.preload();
@@ -141,12 +143,16 @@ export default function CalibrationClient() {
         `เก็บข้อมูลได้ ${trainRef.current.size}/${m.points.length} จุด ไม่พอ / Only ${trainRef.current.size} of ${m.points.length} points were collected (need ${m.minPoints}). The child may not have looked at the targets.`,
       );
     }
-    const train: { features: FeatureVector; x: number; y: number }[] = [];
-    trainRef.current.forEach((feats, i) => {
-      const [fx, fy] = m.points[i];
-      feats.forEach((features) => train.push({ features, x: fx * window.innerWidth, y: fy * window.innerHeight }));
-    });
-    const model: GazeModel = fitGazeModel(train, RESEARCH_CONFIG.ridgeLambda);
+    const pts = [...trainRef.current.entries()].map(([i, features]) => ({
+      i,
+      x: m.points[i][0] * window.innerWidth,
+      y: m.points[i][1] * window.innerHeight,
+      features,
+    }));
+    // Picks the model that best predicts held-out targets for THIS person (still head → eyes only, etc.).
+    const best = fitBestModel(pts, RESEARCH_CONFIG.ridgeLambda);
+    const model: GazeModel = best.model;
+    fitInfoRef.current = { design: best.design, tried: best.tried };
 
     const errors: number[] = [];
     let weak: number[] = [];
@@ -154,10 +160,10 @@ export default function CalibrationClient() {
     if (m.validation.length === 0) {
       // Leave-one-point-out on the inner points: no extra dots for the child.
       const idx = [...m.looPoints];
-      const pts = [...trainRef.current.entries()].map(([i, features]) => ({ i, x: m.points[i][0] * window.innerWidth, y: m.points[i][1] * window.innerHeight, features }));
-      const loo = leaveOnePointOut(pts, RESEARCH_CONFIG.ridgeLambda, (k) => idx.includes(pts[k].i));
-      const heldOut = pts.filter((p) => idx.includes(p.i)).map((p) => p.i);
-      idx.forEach((i) => errors.push(heldOut.includes(i) ? loo[heldOut.indexOf(i)] : Infinity));
+      idx.forEach((i) => {
+        const k = pts.findIndex((p) => p.i === i);
+        errors.push(k >= 0 ? best.looErrors[k] : Infinity);
+      });
       weak = worstIndices(errors, 2).map((k) => idx[k]);
       required = Math.ceil(idx.length / 2);
     }
@@ -254,10 +260,11 @@ export default function CalibrationClient() {
   const downloadData = useCallback(() => {
     const m = RESEARCH_CONFIG.modes[mode];
     const data = {
-      version: 3,
+      version: 3.1,
       mode,
       viewport: { w: window.innerWidth, h: window.innerHeight },
       result: result && { meanErrorPx: result.meanErrorPx, meanErrorDeg: result.meanErrorDeg, grade: result.grade, accuracyMethod: result.accuracyMethod },
+      fit: fitInfoRef.current,
       points: [...trainRef.current.entries()].map(([i, features]) => ({ index: i, target: m.points[i], features })),
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: "application/json" }));
