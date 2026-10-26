@@ -3,7 +3,8 @@
  * ===========================
  * "Advanced screen recording" (spec §4.4): composites, on an offscreen 640×360 canvas,
  *  - the stimulus video frame(s), in the same arrangement they have on screen,
- *  - a small webcam inset (the mirrored preview canvas),
+ *  - a small webcam inset (the mirrored preview canvas), PIXELATED so the person can't be recognised
+ *    (only coarse head position stays visible; see RECORDING_CONFIG.faceBlocks),
  *  - an optional gaze dot,
  * then records canvas.captureStream(15) with MediaRecorder (webm vp9 → vp8 → browser default,
  * 500 kbit/s ≈ 4 MB per minute). Video never leaves the browser here; see recordingUploader.ts.
@@ -19,6 +20,11 @@ export const RECORDING_CONFIG = {
   fps: 15,
   videoBitsPerSecond: 500_000,
   inset: { w: 128, h: 96, margin: 8 },
+  /**
+   * The webcam inset is drawn at this many blocks (w × h) and scaled up without smoothing, so faces are
+   * never stored recognisably (participants are told their face is blurred). 0 would hide the inset.
+   */
+  faceBlocks: { w: 12, h: 9 },
   gazeDot: true,
   /** Safety stop if a page never calls stop() (e.g. the child leaves mid-level). */
   maxDurationMs: 5 * 60 * 1000,
@@ -126,6 +132,7 @@ export function startRecording(src: RecordingSources, opts: { gazeDot?: boolean 
 
   let stream: MediaStream;
   let recorder: MediaRecorder;
+  let pix: HTMLCanvasElement | null = null;
   const mimeType = pickMimeType((t) => MediaRecorder.isTypeSupported(t));
   try {
     stream = canvas.captureStream(fps);
@@ -180,7 +187,16 @@ export function startRecording(src: RecordingSources, opts: { gazeDot?: boolean 
       const x = width - inset.w - inset.margin;
       const y = height - inset.h - inset.margin;
       try {
-        ctx.drawImage(cam, x, y, inset.w, inset.h);
+        // Pixelate: shrink to a few blocks, then enlarge without smoothing. Never draw the camera at full detail.
+        const { w: bw, h: bh } = RECORDING_CONFIG.faceBlocks;
+        pix ??= Object.assign(document.createElement("canvas"), { width: bw, height: bh });
+        const pctx = pix.getContext("2d");
+        if (!pctx) throw new Error("no 2d context");
+        pctx.drawImage(cam, 0, 0, bw, bh);
+        const smooth = ctx.imageSmoothingEnabled;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(pix, x, y, inset.w, inset.h);
+        ctx.imageSmoothingEnabled = smooth;
         ctx.lineWidth = 2;
         ctx.strokeStyle = "#fff";
         ctx.strokeRect(x, y, inset.w, inset.h);
