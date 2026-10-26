@@ -81,6 +81,7 @@ async function mock(route) {
   await page.goto(APP + '/r/demo');
   await page.click('text=เสี่ยงสูง / High risk');
   await page.click('text=เริ่มการสาธิต / Start demo →');
+  await page.click('text=✓ ตกลง / I agree');
   await page.waitForURL(/\/r\/check/);
   await page.click('text=เริ่มตรวจ / Start check');
   await page.waitForSelector('text=Lighting', { timeout: 20000 });

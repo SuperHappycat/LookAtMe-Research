@@ -92,37 +92,39 @@ export default function Test2Client() {
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.title}>Test 2 — Face vs Held-Up-Object Attention</h1>
+      <h1 className={styles.title}>แบบทดสอบที่ 2 — ความสนใจใบหน้ากับสิ่งของ / Test 2 — Face vs Held-Up-Object Attention</h1>
       <p className={styles.subtitle}>
+        {TEST2_PHASE1_END_SEC.toFixed(0)} วินาทีแรก: เด็กมองใบหน้าผู้พูดหรือไม่ หลังจากนั้น: เด็กมองสิ่งของที่ยกขึ้นหรือไม่
+        <br />
         First {TEST2_PHASE1_END_SEC.toFixed(0)}s: is the child looking at the speaker&apos;s face? After
         that: is the child looking at the object being held up?
       </p>
 
       {phase === "no_patient" && (
         <div className={styles.card}>
-          <p className={styles.errorText}>No patient info found for this session.</p>
+          <p className={styles.errorText}>ไม่พบข้อมูลผู้รับการทดสอบ / No patient info found for this session.</p>
           <div className={styles.saveRow}>
             <button className={styles.primaryButton} onClick={() => router.push("/intake")}>
-              Go to Patient Intake
+              ไปที่หน้าเลือกเด็ก / Go to Patient Intake
             </button>
           </div>
         </div>
       )}
 
-      {phase === "checking" && <div className={styles.card}>Loading…</div>}
+      {phase === "checking" && <div className={styles.card}>กำลังโหลด… / Loading…</div>}
       {phase === "loading" && (
-        <div className={styles.card}>Loading the in-browser vision engine (OpenCV.js)…</div>
+        <div className={styles.card}>กำลังโหลดระบบตรวจจับใบหน้า… / Loading the in-browser vision engine…</div>
       )}
       {phase === "load_error" && (
         <div className={styles.card}>
-          <p className={styles.errorText}>Failed to load the vision engine: {runner.loadError}</p>
+          <p className={styles.errorText}>โหลดระบบไม่สำเร็จ / Failed to load the vision engine: {runner.loadError}</p>
         </div>
       )}
 
       {phase === "ready" && (
         <div className={styles.card} style={{ textAlign: "center" }}>
           <button className={styles.primaryButton} onClick={handleStart}>
-            Start Test (20s)
+            เริ่มทดสอบ / Start Test (20s)
           </button>
           {runner.cameraError && (
             <p className={styles.errorText} style={{ marginTop: 12, marginBottom: 0 }}>
@@ -144,35 +146,41 @@ export default function Test2Client() {
       </div>
 
       {phase === "running" && (
-        <div className={styles.timer}>Time remaining: {Math.ceil(runner.remainingSec)}s</div>
+        <div className={styles.timer}>เหลือเวลา / Time remaining: {Math.ceil(runner.remainingSec)}s</div>
+      )}
+
+      {phase === "running" && runner.paused && (
+        <p className={styles.timer} style={{ color: "var(--warning)" }}>
+          ⏸ หยุดชั่วคราว รอให้เด็กกลับมามองจอ / Paused — waiting for the child to look back
+        </p>
       )}
 
       {phase === "running" && runner.soundBlocked && (
         <p className={styles.errorText} style={{ textAlign: "center" }}>
-          Your browser blocked autoplay with sound — click anywhere on the page to enable it.
+          เบราว์เซอร์ปิดเสียงไว้ คลิกที่ใดก็ได้บนหน้าเพื่อเปิดเสียง · Your browser blocked autoplay with sound — click anywhere on the page to enable it.
         </p>
       )}
 
       {phase === "done" && results && (
         <div className={styles.card}>
-          <h2 style={{ marginTop: 0 }}>Results</h2>
+          <h2 style={{ marginTop: 0 }}>ผล / Results</h2>
           <div className={styles.resultsGrid}>
             <div className={styles.statTile}>
               <div className={styles.statValue}>{results.facePct.toFixed(0)}%</div>
-              <div className={styles.statLabel}>Face</div>
+              <div className={styles.statLabel}>ใบหน้า / Face</div>
             </div>
             <div className={styles.statTile}>
               <div className={styles.statValue}>{results.objectPct.toFixed(0)}%</div>
-              <div className={styles.statLabel}>Object</div>
+              <div className={styles.statLabel}>สิ่งของ / Object</div>
             </div>
           </div>
 
           <div className={styles.saveRow}>
             <button className={styles.primaryButton} onClick={() => router.push("/test3")}>
-              Next: Test 3 →
+              ถัดไป: แบบทดสอบที่ 3 / Next: Test 3 →
             </button>
             <button className={styles.secondaryButton} onClick={handleStart}>
-              Run Again
+              ทำอีกครั้ง / Run Again
             </button>
           </div>
         </div>

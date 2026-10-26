@@ -24,6 +24,8 @@ import { directionFromPoint, type Box } from "@/lib/research/gaze/direction";
 import { getCalibrationState } from "@/lib/research/gaze/calibrationStore";
 import { RESEARCH_CONFIG } from "@/lib/research/config";
 import { researchLogger } from "@/lib/research/researchLogger";
+import { isAway, LOOK_AWAY_DEFAULTS, LookAwayTracker } from "@/lib/research/lookAway";
+import { loadSoundPrefs, playReattract } from "@/lib/research/attentionSound";
 
 export type WorkerSample = EngineSample;
 export type WorkerStatus = EngineStatus;
@@ -105,6 +107,16 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
   const [liveStatus, setLiveStatus] = useState<WorkerSample | null>(null);
   const [soundBlocked, setSoundBlocked] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  /** Pause-when-looking-away: the stimulus is paused while the child looks away (not scored). */
+  const [paused, setPaused] = useState(false);
+  const trackerRef = useRef<LookAwayTracker>(new LookAwayTracker(LOOK_AWAY_DEFAULTS));
+  /** Test time still to run (ms) and when the current playing segment started (performance.now()). */
+  const remainingMsRef = useRef(0);
+  const segmentStartRef = useRef(0);
+  const reattractIntervalRef = useRef<number | null>(null);
+  // Set to pauseTest/resumeTest below (declared later; used by the engine subscription).
+  const pauseRef = useRef<() => void>(() => {});
+  const resumeRef = useRef<() => void>(() => {});
 
   // At most one frame is in flight at a time (the engine refuses extra
   // frames while busy), so we never pay for a readback that'd be dropped.
@@ -134,6 +146,8 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
     if (detectionIntervalRef.current !== null) window.clearInterval(detectionIntervalRef.current);
     if (countdownIntervalRef.current !== null) window.clearInterval(countdownIntervalRef.current);
     if (stopTimeoutRef.current !== null) window.clearTimeout(stopTimeoutRef.current);
+    if (reattractIntervalRef.current !== null) window.clearInterval(reattractIntervalRef.current);
+    reattractIntervalRef.current = null;
     rafIdRef.current = null;
     detectionIntervalRef.current = null;
     countdownIntervalRef.current = null;
@@ -174,7 +188,12 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
         );
         if (runningRef.current) {
           const videoPosSec = videoRefsRef.current[0]?.current?.currentTime ?? 0;
-          onSampleRef.current(sample, videoPosSec);
+          const away = isAway(sample, { w: window.innerWidth, h: window.innerHeight }, LOOK_AWAY_DEFAULTS.offscreenMargin);
+          const ev = trackerRef.current.update(away, performance.now());
+          if (ev === "pause") pauseRef.current();
+          else if (ev === "resume") resumeRef.current();
+          // Paused time is not scored (the stimulus isn't playing).
+          if (!trackerRef.current.paused) onSampleRef.current(sample, videoPosSec);
           // Research app: keep every sample for the gaze CSV / quality score.
           researchLogger.sample(sample, videoPosSec, boxes);
         }
@@ -196,6 +215,10 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
 
   const stop = useCallback(() => {
     runningRef.current = false;
+    const tr = trackerRef.current;
+    tr.finish(performance.now());
+    researchLogger.pauses(tr.pauses, tr.totalPausedMs);
+    setPaused(false);
     stopAllLoops();
     videoRefsRef.current.forEach((ref) => ref.current?.pause());
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -208,6 +231,44 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
   const stopRef = useRef(stop);
   useEffect(() => {
     stopRef.current = stop;
+  });
+
+  const startCountdown = useCallback(() => {
+    if (countdownIntervalRef.current !== null) window.clearInterval(countdownIntervalRef.current);
+    countdownIntervalRef.current = window.setInterval(() => {
+      const left = remainingMsRef.current - (performance.now() - segmentStartRef.current);
+      setRemainingSec(Math.max(0, left / 1000));
+    }, 250);
+  }, []);
+
+  /** Looking away: freeze the stimulus and the clock, call the child back with a sound. */
+  const pauseTest = useCallback(() => {
+    remainingMsRef.current = Math.max(0, remainingMsRef.current - (performance.now() - segmentStartRef.current));
+    if (stopTimeoutRef.current !== null) window.clearTimeout(stopTimeoutRef.current);
+    if (countdownIntervalRef.current !== null) window.clearInterval(countdownIntervalRef.current);
+    stopTimeoutRef.current = null;
+    countdownIntervalRef.current = null;
+    videoRefsRef.current.forEach((ref) => ref.current?.pause());
+    const prefs = loadSoundPrefs();
+    playReattract(prefs);
+    reattractIntervalRef.current = window.setInterval(() => playReattract(prefs), 3000);
+    setPaused(true);
+  }, []);
+
+  /** Looking back (or paused too long): play on from where it stopped. */
+  const resumeTest = useCallback(() => {
+    if (reattractIntervalRef.current !== null) window.clearInterval(reattractIntervalRef.current);
+    reattractIntervalRef.current = null;
+    videoRefsRef.current.forEach((ref) => void ref.current?.play().catch(() => setSoundBlocked(true)));
+    segmentStartRef.current = performance.now();
+    stopTimeoutRef.current = window.setTimeout(() => stopRef.current(), remainingMsRef.current);
+    startCountdown();
+    setPaused(false);
+  }, [startCountdown]);
+
+  useEffect(() => {
+    pauseRef.current = pauseTest;
+    resumeRef.current = resumeTest;
   });
 
   const tryPlayAll = useCallback(() => {
@@ -315,14 +376,17 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
     setRunning(true);
     setRemainingSec(testDurationMs / 1000);
 
+    trackerRef.current = new LookAwayTracker(LOOK_AWAY_DEFAULTS);
+    setPaused(false);
+    remainingMsRef.current = testDurationMs;
+    segmentStartRef.current = performance.now();
+
     rafIdRef.current = requestAnimationFrame(previewLoopRef.current);
     detectionIntervalRef.current = window.setInterval(runDetectionTick, DETECTION_INTERVAL_MS);
-    countdownIntervalRef.current = window.setInterval(() => {
-      setRemainingSec((s) => Math.max(0, s - 0.25));
-    }, 250);
+    startCountdown();
     stopTimeoutRef.current = window.setTimeout(() => stopRef.current(), testDurationMs);
     return true;
-  }, [testDurationMs, runDetectionTick, webcamVideoRef, previewCanvasRef, tryPlayAll]);
+  }, [testDurationMs, runDetectionTick, webcamVideoRef, previewCanvasRef, tryPlayAll, startCountdown]);
 
   return {
     workerStatus,
@@ -332,6 +396,7 @@ export function useGazeTestRunner(options: UseGazeTestRunnerOptions) {
     liveStatus,
     soundBlocked,
     cameraError,
+    paused,
     start,
     stop,
   };

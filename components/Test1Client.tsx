@@ -105,39 +105,41 @@ export default function Test1Client() {
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.title}>Test 1 — Human vs Geometric Preference</h1>
+      <h1 className={styles.title}>แบบทดสอบที่ 1 — ความสนใจคนกับรูปทรง / Test 1 — Human vs Geometric Preference</h1>
       <p className={styles.subtitle}>
-        Runs entirely in your browser — your webcam video never leaves your device. Only the summary
-        result (no video, no images) is saved.
+        ระบบคำนวณการมองในเครื่องนี้ ภาพจากกล้องไม่ถูกส่งออกไป จะบันทึกวิดีโอหน้าจอ (ใบหน้าเบลอ) เฉพาะเมื่อผู้ปกครองยินยอม
+        <br />
+        Gaze is computed on this device; the camera picture is not sent anywhere. A screen recording (face pixelated) is
+        saved only if the parent agreed.
       </p>
 
       {phase === "no_patient" && (
         <div className={styles.card}>
-          <p className={styles.errorText}>No patient info found for this session.</p>
+          <p className={styles.errorText}>ไม่พบข้อมูลผู้รับการทดสอบ / No patient info found for this session.</p>
           <div className={styles.saveRow}>
             <button className={styles.primaryButton} onClick={() => router.push("/intake")}>
-              Go to Patient Intake
+              ไปที่หน้าเลือกเด็ก / Go to Patient Intake
             </button>
           </div>
         </div>
       )}
 
-      {phase === "checking" && <div className={styles.card}>Loading…</div>}
+      {phase === "checking" && <div className={styles.card}>กำลังโหลด… / Loading…</div>}
 
       {phase === "loading" && (
-        <div className={styles.card}>Loading the in-browser vision engine (OpenCV.js)…</div>
+        <div className={styles.card}>กำลังโหลดระบบตรวจจับใบหน้า… / Loading the in-browser vision engine…</div>
       )}
 
       {phase === "load_error" && (
         <div className={styles.card}>
-          <p className={styles.errorText}>Failed to load the vision engine: {runner.loadError}</p>
+          <p className={styles.errorText}>โหลดระบบไม่สำเร็จ / Failed to load the vision engine: {runner.loadError}</p>
         </div>
       )}
 
       {phase === "ready" && (
         <div className={styles.card} style={{ textAlign: "center" }}>
           <button className={styles.primaryButton} onClick={handleStart}>
-            Start Test (20s)
+            เริ่มทดสอบ / Start Test (20s)
           </button>
           {runner.cameraError && (
             <p className={styles.errorText} style={{ marginTop: 12, marginBottom: 0 }}>
@@ -163,13 +165,13 @@ export default function Test1Client() {
           side happened to match the default. */}
       <div className={phase === "running" ? styles.videoRow : `${styles.videoRow} ${styles.videoRowOffscreen}`}>
         <div style={{ flex: "1 1 480px", maxWidth: 760, order: humanSide === "left" ? 0 : 1 }}>
-          <div className={styles.videoLabel}>Human</div>
+          <div className={styles.videoLabel}>คน / Human</div>
           <div className={styles.videoPanel}>
             <video ref={humanVideoRef} src="/videos/human.mp4" loop playsInline />
           </div>
         </div>
         <div style={{ flex: "1 1 480px", maxWidth: 760, order: humanSide === "left" ? 1 : 0 }}>
-          <div className={styles.videoLabel}>Geometric</div>
+          <div className={styles.videoLabel}>รูปทรง / Geometric</div>
           <div className={styles.videoPanel}>
             <video ref={geoVideoRef} src="/videos/geometric.mp4" loop playsInline />
           </div>
@@ -177,43 +179,49 @@ export default function Test1Client() {
       </div>
 
       {phase === "running" && (
-        <div className={styles.timer}>Time remaining: {Math.ceil(runner.remainingSec)}s</div>
+        <div className={styles.timer}>เหลือเวลา / Time remaining: {Math.ceil(runner.remainingSec)}s</div>
+      )}
+
+      {phase === "running" && runner.paused && (
+        <p className={styles.timer} style={{ color: "var(--warning)" }}>
+          ⏸ หยุดชั่วคราว รอให้เด็กกลับมามองจอ / Paused — waiting for the child to look back
+        </p>
       )}
 
       {phase === "running" && runner.soundBlocked && (
         <p className={styles.errorText} style={{ textAlign: "center" }}>
-          Your browser blocked autoplay with sound — click anywhere on the page to enable it.
+          เบราว์เซอร์ปิดเสียงไว้ คลิกที่ใดก็ได้บนหน้าเพื่อเปิดเสียง · Your browser blocked autoplay with sound — click anywhere on the page to enable it.
         </p>
       )}
 
       {phase === "done" && results && (
         <div className={styles.card}>
-          <h2 style={{ marginTop: 0 }}>Results</h2>
+          <h2 style={{ marginTop: 0 }}>ผล / Results</h2>
           <div className={styles.resultsGrid}>
             <div className={styles.statTile}>
               <div className={styles.statValue}>{results.humanPct.toFixed(0)}%</div>
-              <div className={styles.statLabel}>Human</div>
+              <div className={styles.statLabel}>คน / Human</div>
             </div>
             <div className={styles.statTile}>
               <div className={styles.statValue}>{results.geometricPct.toFixed(0)}%</div>
-              <div className={styles.statLabel}>Geometric</div>
+              <div className={styles.statLabel}>รูปทรง / Geometric</div>
             </div>
             <div className={styles.statTile}>
               <div className={styles.statValue}>{results.switches}</div>
-              <div className={styles.statLabel}>Gaze Switches</div>
+              <div className={styles.statLabel}>สลับการมอง / Gaze Switches</div>
             </div>
             <div className={styles.statTile}>
               <div className={styles.statValue}>{results.avgFixationMs.toFixed(0)} ms</div>
-              <div className={styles.statLabel}>Avg Fixation</div>
+              <div className={styles.statLabel}>มองนานเฉลี่ย / Avg Fixation</div>
             </div>
           </div>
 
           <div className={styles.saveRow}>
             <button className={styles.primaryButton} onClick={() => router.push("/test2")}>
-              Next: Test 2 →
+              ถัดไป: แบบทดสอบที่ 2 / Next: Test 2 →
             </button>
             <button className={styles.secondaryButton} onClick={handleStart}>
-              Run Again
+              ทำอีกครั้ง / Run Again
             </button>
           </div>
         </div>

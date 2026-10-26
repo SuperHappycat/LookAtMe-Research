@@ -21,6 +21,7 @@ import { getGazeEngine } from "@/lib/research/gaze";
 import { friendlyError } from "@/lib/research/supabase/client";
 import { canWrite, useResearch } from "../ResearchShell";
 import SyncStatusChip, { useOnline } from "./SyncStatusChip";
+import { useAssent } from "../AssentDialog";
 import css from "./offline.module.css";
 
 const fmt = (iso: string) => {
@@ -33,6 +34,7 @@ const fmt = (iso: string) => {
 
 export default function OfflineClient() {
   const router = useRouter();
+  const { ask: askAssent, dialog: assentDialog } = useAssent();
   const { active } = useResearch();
   const orgId = active?.org.id;
   const online = useOnline();
@@ -66,6 +68,8 @@ export default function OfflineClient() {
     it.kind === "recording" ? it.childCode : (kids.find((k) => k.id === it.childId)?.code ?? "—");
 
   async function start(c: CachedChild) {
+    const assent = await askAssent(c.code);
+    if (!assent) return;
     setBusy(c.id);
     setError(null);
     try {
@@ -75,6 +79,7 @@ export default function OfflineClient() {
         engine: getGazeEngine().name,
         allowRecording: c.consent.allow_recording,
         blind: !!c.blind,
+        assent,
       });
       router.push("/r/check");
     } catch (err) {
@@ -140,6 +145,7 @@ export default function OfflineClient() {
 
   return (
     <div className={rs.wide}>
+      {assentDialog}
       <div className={css.headerRow}>
         <h1 style={{ fontSize: 26 }}>ข้อมูลออฟไลน์ / Offline data</h1>
         <SyncStatusChip />

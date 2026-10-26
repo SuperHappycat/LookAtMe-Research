@@ -12,6 +12,7 @@ import rs from "@/styles/research.module.css";
 import { getGazeEngine } from "@/lib/research/gaze";
 import { DEMO_PRESETS, demoResult, startDemoScreening, type DemoPreset } from "@/lib/research/demo";
 import { useResearch } from "./ResearchShell";
+import { useAssent } from "./AssentDialog";
 
 const PRESET_TEXT: Record<DemoPreset, string> = {
   Low: "เสี่ยงต่ำ / Low risk",
@@ -25,15 +26,19 @@ export default function DemoClient() {
   const [score, setScore] = useState<number>(DEMO_PRESETS.Low);
   const [child, setChild] = useState(true);
   const preview = demoResult(score);
+  const { ask: askAssent, dialog: assentDialog } = useAssent();
 
-  function start() {
+  async function start() {
     if (!active) return;
-    startDemoScreening({ orgId: active.org.id, engine: getGazeEngine().name, ageMonths: child ? 36 : 240, score });
+    const assent = await askAssent("DEMO");
+    if (!assent) return;
+    startDemoScreening({ orgId: active.org.id, engine: getGazeEngine().name, ageMonths: child ? 36 : 240, score, assent });
     router.push("/r/check");
   }
 
   return (
     <div className={styles.pageNarrow}>
+      {assentDialog}
       <h1 className={styles.titleCentered}>โหมดสาธิต / Demo mode</h1>
       <p className={styles.subtitleCentered}>
         ทดสอบได้ครบทุกขั้นตอน แต่หน้าสรุปจะแสดงผลที่เลือกไว้ และไม่บันทึกข้อมูลใด ๆ ไม่ใช้โควตา

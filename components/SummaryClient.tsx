@@ -22,8 +22,12 @@ import { clearSession, getSession, type ScreeningSession } from "@/lib/sessionSt
 import ResearchSaveCard from "@/components/research/ResearchSaveCard";
 import { endResearchScreening, getResearchContext } from "@/lib/research/screening";
 import { demoResult } from "@/lib/research/demo";
+import NextSteps from "@/components/research/NextSteps";
+import report from "@/components/research/report.module.css";
+import { NOT_DIAGNOSTIC } from "@/lib/research/nextSteps";
 
 const RISK_COLORS: Record<RiskLevel, string> = { Low: "var(--success)", Moderate: "var(--warning)", High: "var(--danger)" };
+const RISK_TH: Record<RiskLevel, string> = { Low: "เสี่ยงต่ำ", Moderate: "เสี่ยงปานกลาง", High: "เสี่ยงสูง" };
 
 export default function SummaryClient() {
   const router = useRouter();
@@ -74,7 +78,7 @@ export default function SummaryClient() {
   if (session === null) {
     return (
       <div className={styles.pageNarrow}>
-        <div className={styles.card}>Loading…</div>
+        <div className={styles.card}>กำลังโหลด… / Loading…</div>
       </div>
     );
   }
@@ -82,9 +86,9 @@ export default function SummaryClient() {
   if (!session.patient) {
     return (
       <div className={styles.pageNarrow}>
-        <h1 className={styles.titleCentered}>Screening Summary</h1>
+        <h1 className={styles.titleCentered}>สรุปผลการคัดกรอง / Screening Summary</h1>
         <div className={styles.card}>
-          <p className={styles.errorText}>No patient info found for this session.</p>
+          <p className={styles.errorText}>ไม่พบข้อมูลผู้รับการทดสอบ / No patient info found for this session.</p>
           <div className={styles.saveRow}>
             <button className={styles.primaryButton} onClick={() => router.push("/intake")}>
               Go to Patient Intake
@@ -100,10 +104,19 @@ export default function SummaryClient() {
   if (!session.test2) missing.push("Test 2");
   if (!session.test3) missing.push("Test 3");
 
+  const today = new Date().toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" });
+
   return (
     <div className={styles.pageNarrow}>
-      <h1 className={styles.titleCentered}>Screening Summary</h1>
-      <p className={styles.subtitleCentered}>
+      <div className={report.printHeader}>
+        <h1>LookAtMe — รายงานผลการคัดกรอง / Screening report</h1>
+        <p>
+          รหัสเด็ก / Child code: <strong>{session.patient.name}</strong>
+          {session.patient.dateOfBirth ? ` · เกิด / Born: ${session.patient.dateOfBirth.slice(0, 7)}` : ""} · วันที่ / Date: {today}
+        </p>
+      </div>
+      <h1 className={`${styles.titleCentered} ${report.noPrint}`}>สรุปผลการคัดกรอง / Screening Summary</h1>
+      <p className={`${styles.subtitleCentered} ${report.noPrint}`}>
         {session.patient.name}{session.patient.province ? ` • ${session.patient.province}` : ""}
       </p>
 
@@ -117,8 +130,8 @@ export default function SummaryClient() {
 
       {!demo && missing.length > 0 && (
         <p className={styles.errorText} style={{ textAlign: "center" }}>
-          Not completed yet: {missing.join(", ")} (using a neutral 50% placeholder for each in the score
-          below).
+          ยังทำไม่ครบ / Not completed yet: {missing.join(", ")} (ใช้ค่า 50% แทน / using a neutral 50% placeholder for each in
+          the score below).
         </p>
       )}
 
@@ -135,46 +148,57 @@ export default function SummaryClient() {
         <>
           <div className={styles.overallCard}>
             <div className={styles.overallScore}>
-              Overall Score: {result.overallScore.toFixed(0)} / 100
+              คะแนนรวม / Overall Score: {result.overallScore.toFixed(0)} / 100
             </div>
             <span className={styles.riskBadge} style={{ background: RISK_COLORS[result.riskLevel] }}>
-              {result.riskLevel} Risk
+              {RISK_TH[result.riskLevel]} / {result.riskLevel} Risk
             </span>
           </div>
 
           <div className={styles.resultsGrid}>
             <div className={styles.statTile}>
               <div className={styles.statValue}>{tile(session.test1?.humanPct, demo?.sub.humanPreference ?? 0)}</div>
-              <div className={styles.statLabel}>Test 1: Human Preference</div>
+              <div className={styles.statLabel}>แบบทดสอบที่ 1: ความสนใจคน / Test 1: Human Preference</div>
             </div>
             <div className={styles.statTile}>
               <div className={styles.statValue}>{tile(session.test2?.facePct, demo?.sub.faceAttention ?? 0)}</div>
-              <div className={styles.statLabel}>Test 2: Face Attention</div>
+              <div className={styles.statLabel}>แบบทดสอบที่ 2: ความสนใจใบหน้า / Test 2: Face Attention</div>
             </div>
             <div className={styles.statTile}>
               <div className={styles.statValue}>{tile(session.test3?.accuracyPct, demo?.sub.jointAttention ?? 0)}</div>
-              <div className={styles.statLabel}>Test 3: Joint Attention</div>
+              <div className={styles.statLabel}>แบบทดสอบที่ 3: การมองตามร่วมกัน / Test 3: Joint Attention</div>
             </div>
+          </div>
+
+          <NextSteps risk={result.riskLevel} />
+
+          <div className={`${styles.saveRow} ${report.noPrint}`} style={{ justifyContent: "center" }}>
+            <button className={styles.primaryButton} onClick={() => window.print()}>
+              พิมพ์ / บันทึกเป็น PDF · Print / Save as PDF
+            </button>
           </div>
         </>
       )}
 
       {/* Research app: results are saved to Supabase for the selected child
           (the original Google Sheet / Gmail buttons are removed). */}
-      {demo ? (
-        <p className={styles.subtitleCentered}>โหมดสาธิต: ไม่ได้บันทึกผล / Demo mode: nothing was saved.</p>
-      ) : (
-        <ResearchSaveCard session={session} result={result} />
-      )}
-      <div className={styles.saveRow} style={{ justifyContent: "center" }}>
-        <button className={styles.secondaryButton} onClick={handleStartOver}>
-          Start Over
-        </button>
+      <div className={report.noPrint}>
+        {demo ? (
+          <p className={styles.subtitleCentered}>โหมดสาธิต: ไม่ได้บันทึกผล / Demo mode: nothing was saved.</p>
+        ) : (
+          <ResearchSaveCard session={session} result={result} />
+        )}
+        <div className={styles.saveRow} style={{ justifyContent: "center" }}>
+          <button className={styles.secondaryButton} onClick={handleStartOver}>
+            เริ่มใหม่ / Start Over
+          </button>
+        </div>
       </div>
 
       <p className={styles.subtitleCentered} style={{ marginTop: 24 }}>
-        This is a preliminary screening tool, not a diagnostic instrument. Discuss results with a
-        qualified healthcare professional.
+        {NOT_DIAGNOSTIC.th} ควรปรึกษาผลกับบุคลากรทางการแพทย์
+        <br />
+        {NOT_DIAGNOSTIC.en} Discuss results with a qualified healthcare professional.
       </p>
     </div>
   );

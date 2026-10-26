@@ -123,6 +123,7 @@ async function mock(route) {
   await ctx.setOffline(true);
   await page.waitForSelector('text=ออฟไลน์ / Offline');
   await page.click('text=เริ่มคัดกรองแบบออฟไลน์ / Start offline screening');
+  await page.click('text=✓ ตกลง / I agree');
   await page.waitForURL(/\/r\/check/, { timeout: 20000 });
   console.log('ctx:', await page.evaluate(() => sessionStorage.getItem('lookatme_research_ctx')));
   await page.click('text=เริ่มตรวจ / Start check');

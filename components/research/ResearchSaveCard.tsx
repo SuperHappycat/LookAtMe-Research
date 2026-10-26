@@ -96,6 +96,7 @@ export default function ResearchSaveCard({
           test2: session.test2,
           test3: session.test3,
           cameraCheck: ctx.cameraCheck ?? null,
+          assent: ctx.assent ?? null,
           calibration: calRec
             ? {
                 meanErrorPx: Number.isFinite(calRec.meanErrorPx) ? calRec.meanErrorPx : null,

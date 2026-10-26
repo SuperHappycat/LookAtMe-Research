@@ -15,6 +15,7 @@ import rs from "@/styles/research.module.css";
 import b from "@/styles/research-b.module.css";
 import { apiFetch, friendlyError, getSupabase } from "@/lib/research/supabase/client";
 import { ageInMonths } from "@/lib/research/screening";
+import { useAssent } from "./AssentDialog";
 import { cacheChildForOffline, forgetCachedChild, startScreening as startScreeningFlow } from "@/lib/research/offline/start";
 import { getGazeEngine } from "@/lib/research/gaze";
 import { planHas } from "@/lib/research/plans";
@@ -192,6 +193,7 @@ function WithdrawResult({ summary }: { summary: WithdrawSummary }) {
 export default function ChildClient() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { ask: askAssent, dialog: assentDialog } = useAssent();
   const { active, memberships, session } = useResearch();
   const [child, setChild] = useState<Child | null | undefined>(undefined);
   const [orgBlind, setOrgBlind] = useState(false);
@@ -274,6 +276,9 @@ export default function ChildClient() {
 
   async function startScreening() {
     if (!child) return;
+    // Child assent first: "not now" cancels before anything is started (no quota used).
+    const assent = await askAssent(child.code);
+    if (!assent) return;
     setBusy(true);
     setError(null);
     try {
@@ -283,6 +288,7 @@ export default function ChildClient() {
         engine: getGazeEngine().name,
         allowRecording: !!consent?.allow_recording,
         blind: blindOn,
+        assent,
       });
     } catch (err) {
       setBusy(false);
@@ -303,6 +309,7 @@ export default function ChildClient() {
 
   return (
     <div className={rs.wide}>
+      {assentDialog}
       <p>
         <Link href="/r">← เด็กทั้งหมด / All children</Link>
       </p>
