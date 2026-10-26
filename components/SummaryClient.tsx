@@ -20,7 +20,8 @@ import styles from "@/styles/shared.module.css";
 import { computeOverallScore, type RiskLevel } from "@/lib/scoring";
 import { clearSession, getSession, type ScreeningSession } from "@/lib/sessionState";
 import ResearchSaveCard from "@/components/research/ResearchSaveCard";
-import { getResearchContext } from "@/lib/research/screening";
+import { endResearchScreening, getResearchContext } from "@/lib/research/screening";
+import { demoResult } from "@/lib/research/demo";
 
 const RISK_COLORS: Record<RiskLevel, string> = { Low: "var(--success)", Moderate: "var(--warning)", High: "var(--danger)" };
 
@@ -29,6 +30,8 @@ export default function SummaryClient() {
   const [session, setSession] = useState<ScreeningSession | null>(null);
   // Blind mode (hospital): the result is saved as usual but not shown on this screen.
   const [blind, setBlind] = useState(false);
+  // Demo mode: show the presenter's chosen result; nothing is saved.
+  const [demoScore, setDemoScore] = useState<number | null>(null);
 
   useEffect(() => {
     // sessionStorage doesn't exist during this component's server render,
@@ -38,25 +41,35 @@ export default function SummaryClient() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSession(getSession());
     setBlind(!!getResearchContext()?.blind);
+    setDemoScore(getResearchContext()?.demo?.score ?? null);
   }, []);
 
   // Computed unconditionally (before the early returns below) so both
   // handleSave and the JSX can use the same value -- guards internally
   // for a session/patient that isn't loaded yet.
+  const demo = useMemo(() => (demoScore === null ? null : demoResult(demoScore)), [demoScore]);
   const result = useMemo(
     () =>
+      demo ??
       computeOverallScore({
         humanPreference: session?.test1?.humanPct ?? 50,
         faceAttention: session?.test2?.facePct ?? 50,
         jointAttention: session?.test3?.accuracyPct ?? 50,
       }),
-    [session],
+    [session, demo],
   );
+  const tile = (real: number | undefined, demoValue: number) =>
+    demo ? `${demoValue.toFixed(0)}%` : real === undefined ? "—" : `${real.toFixed(0)}%`;
 
   const handleStartOver = useCallback(() => {
+    if (demoScore !== null) {
+      endResearchScreening();
+      router.push("/r/demo");
+      return;
+    }
     clearSession();
     router.push("/");
-  }, [router]);
+  }, [router, demoScore]);
 
   if (session === null) {
     return (
@@ -94,7 +107,15 @@ export default function SummaryClient() {
         {session.patient.name}{session.patient.province ? ` • ${session.patient.province}` : ""}
       </p>
 
-      {missing.length > 0 && (
+      {demo && (
+        <p style={{ textAlign: "center", margin: "0 0 8px" }}>
+          <span className={styles.riskBadge} style={{ background: "var(--muted)" }}>
+            สาธิต / Demo
+          </span>
+        </p>
+      )}
+
+      {!demo && missing.length > 0 && (
         <p className={styles.errorText} style={{ textAlign: "center" }}>
           Not completed yet: {missing.join(", ")} (using a neutral 50% placeholder for each in the score
           below).
@@ -123,21 +144,15 @@ export default function SummaryClient() {
 
           <div className={styles.resultsGrid}>
             <div className={styles.statTile}>
-              <div className={styles.statValue}>
-                {session.test1 ? `${session.test1.humanPct.toFixed(0)}%` : "—"}
-              </div>
+              <div className={styles.statValue}>{tile(session.test1?.humanPct, demo?.sub.humanPreference ?? 0)}</div>
               <div className={styles.statLabel}>Test 1: Human Preference</div>
             </div>
             <div className={styles.statTile}>
-              <div className={styles.statValue}>
-                {session.test2 ? `${session.test2.facePct.toFixed(0)}%` : "—"}
-              </div>
+              <div className={styles.statValue}>{tile(session.test2?.facePct, demo?.sub.faceAttention ?? 0)}</div>
               <div className={styles.statLabel}>Test 2: Face Attention</div>
             </div>
             <div className={styles.statTile}>
-              <div className={styles.statValue}>
-                {session.test3 ? `${session.test3.accuracyPct.toFixed(0)}%` : "—"}
-              </div>
+              <div className={styles.statValue}>{tile(session.test3?.accuracyPct, demo?.sub.jointAttention ?? 0)}</div>
               <div className={styles.statLabel}>Test 3: Joint Attention</div>
             </div>
           </div>
@@ -146,7 +161,11 @@ export default function SummaryClient() {
 
       {/* Research app: results are saved to Supabase for the selected child
           (the original Google Sheet / Gmail buttons are removed). */}
-      <ResearchSaveCard session={session} result={result} />
+      {demo ? (
+        <p className={styles.subtitleCentered}>โหมดสาธิต: ไม่ได้บันทึกผล / Demo mode: nothing was saved.</p>
+      ) : (
+        <ResearchSaveCard session={session} result={result} />
+      )}
       <div className={styles.saveRow} style={{ justifyContent: "center" }}>
         <button className={styles.secondaryButton} onClick={handleStartOver}>
           Start Over

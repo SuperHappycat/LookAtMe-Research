@@ -27,6 +27,8 @@ export interface ResearchContext {
   blind?: boolean;
   /** True when the session was started offline; sessionId is then "" until it syncs (E). */
   offline?: boolean;
+  /** Demo mode (lib/research/demo.ts): the summary shows this overall score and nothing is saved. */
+  demo?: { score: number };
   cameraCheck?: {
     faceFoundPct: number | null;
     meanLuma: number | null;
