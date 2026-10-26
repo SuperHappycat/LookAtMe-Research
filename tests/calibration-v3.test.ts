@@ -99,3 +99,44 @@ test("records saved before v3 (no design) still predict with the full design", (
   const f = pts[0].features[0];
   assert.deepEqual(predictGaze(legacy, f), predictGaze(full, f));
 });
+
+test("fitBestModel: picks a design per person and stays accurate for a moving child", async () => {
+  const { fitBestModel } = await import("../lib/research/gaze/regression.ts");
+  let err = 0;
+  const R = 15;
+  for (let r = 0; r < R; r++) {
+    const pts = V3_CHILD.map(([x, y]) => look(x, y));
+    const best = fitBestModel(pts, 0.01);
+    assert.ok(["eyes", "compact", "compact_int"].includes(best.design));
+    assert.equal(best.looErrors.length, pts.length);
+    err += meanErr(best.model, GRID.map(([x, y]) => look(x, y)));
+  }
+  assert.ok(err / R < 198, `chosen model ${(err / R).toFixed(0)} px should be under ~5°`);
+});
+
+test("fitBestModel: a still head with tilted-eye geometry prefers a model with the eye-x × eye-y term", async () => {
+  const { fitBestModel } = await import("../lib/research/gaze/regression.ts");
+  // Real data showed the iris's sideways offset shrinking when looking down: ex = gx·(1 − 1.2·gy).
+  const pts = V3_CHILD.map(([fx, fy]) => {
+    const gx = fx - 0.5;
+    const gy = fy - 0.5;
+    const features = Array.from({ length: 12 }, () => ({
+      ex: 0.25 * gx * (1 - 1.2 * gy) + 0.002 * gauss(),
+      ey: 0.09 * gy + 0.002 * gauss(),
+      hx: 0.001 * gauss(), hy: 0.1 + 0.001 * gauss(), px: 0.48 + 0.002 * gauss(), py: 0.91 + 0.002 * gauss(),
+      s: 0.45 + 0.001 * gauss(), yaw: -0.015 + 0.003 * gauss(), pitch: 0.05 + 0.003 * gauss(),
+    }));
+    return { x: fx * W, y: fy * H, features };
+  });
+  const best = fitBestModel(pts, 0.01);
+  assert.ok(best.design === "eyes" || best.design === "compact_int", `got ${best.design}`);
+  assert.ok((best.tried[best.design] ?? Infinity) <= (best.tried.compact ?? Infinity));
+});
+
+test("facePositionHint: warns for a low, off-centre or too-close face", async () => {
+  const { facePositionHint } = await import("../lib/research/gaze/calibrationCore.ts");
+  assert.match(facePositionHint({ px: 0.5, py: 0.92, s: 0.3 }) ?? "", /low/);
+  assert.match(facePositionHint({ px: 0.1, py: 0.5, s: 0.3 }) ?? "", /middle/);
+  assert.match(facePositionHint({ px: 0.5, py: 0.5, s: 0.45 }) ?? "", /close/);
+  assert.equal(facePositionHint({ px: 0.5, py: 0.5, s: 0.25 }), null);
+});

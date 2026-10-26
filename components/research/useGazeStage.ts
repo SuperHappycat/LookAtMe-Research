@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RESEARCH_CONFIG } from "@/lib/research/config";
 import { collectFixation, type CollectControls, type CollectResult } from "@/lib/research/gaze/collector";
-import type { CalibrationMode } from "@/lib/research/gaze/calibrationCore";
+import { facePositionHint, type CalibrationMode } from "@/lib/research/gaze/calibrationCore";
 import {
   loadSoundPrefs,
   playChime,
@@ -34,6 +34,7 @@ export function useGazeStage(grab: () => HTMLCanvasElement | null) {
   const [target, setTarget] = useState<StageTarget | null>(null);
   const [status, setStatus] = useState("");
   const [faceVisible, setFaceVisible] = useState(true);
+  const [positionHint, setPositionHint] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
   const [sound, setSoundState] = useState<SoundPrefs>({ on: true, volume: 0.4 });
   const soundRef = useRef(sound);
@@ -108,6 +109,10 @@ export function useGazeStage(grab: () => HTMLCanvasElement | null) {
           setTimeout(() => setTarget((t) => (t && t.phase === "reattract" ? { ...t, phase: "hold" } : t)), 1200);
         },
         onFaceVisible: setFaceVisible,
+        onFrame: (f) => {
+          const h = facePositionHint(f);
+          setPositionHint((prev) => (prev === h ? prev : h));
+        },
       });
       if (!res.skipped) {
         setTarget({ x, y, index, phase: "reward", progress: 1 });
@@ -119,7 +124,7 @@ export function useGazeStage(grab: () => HTMLCanvasElement | null) {
     [grab],
   );
 
-  const warning = !faceVisible ? "มองไม่เห็นใบหน้า ขยับให้อยู่หน้ากล้อง / Face not visible" : null;
+  const warning = !faceVisible ? "มองไม่เห็นใบหน้า ขยับให้อยู่หน้ากล้อง / Face not visible" : positionHint;
 
   return {
     target,

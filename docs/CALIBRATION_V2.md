@@ -62,6 +62,20 @@ v3 changes:
 
 The simulation is a model of reality, not a real child; pilot data should confirm it.
 
+### v3.1 — tuned on the first real calibration file
+
+The first real child-mode file (8 targets, passed at about 110 px / 2.8°) showed:
+- The head stayed very still, so v3's head terms mostly added noise.
+- Looking down shrank the eyes' sideways movement (top-right target: eye-x 0.12, bottom-right: 0.08), so the
+  horizontal position also depends on the vertical eye position.
+- The face sat at the bottom of the camera picture (nose at 92% of the height) and close to the camera.
+
+Changes:
+- **Per-person model choice**: three designs are fitted (eyes only with an eye-x × eye-y term; v3 compact;
+  compact with the eye-x × eye-y term) and the one with the lowest leave-one-point-out error is kept. On that
+  file the error drops from about 110 px to about 72 px (≈ 1.8°). The choice is saved in the data download.
+- **Face-position hint** during calibration when the face is low, high, off-centre or too close.
+
 ## Settings to tune with pilot data (`lib/research/config.ts`)
 
 `maxCalibrationErrorDeg` (5), `maxEndCheckErrorDeg` (6), `childModeUnderMonths` (72), `fixationMaxSpread`,
