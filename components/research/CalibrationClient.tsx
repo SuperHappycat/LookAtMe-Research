@@ -1,17 +1,19 @@
 "use client";
 
 /**
- * components/research/CalibrationClient.tsx — calibration v2 (Research app, MediaPipe engine).
+ * components/research/CalibrationClient.tsx — calibration v3 (Research app, MediaPipe engine).
  *
- * Child mode (default for children under RESEARCH_CONFIG.childModeUnderMonths): 5 points,
+ * Child mode (default for children under RESEARCH_CONFIG.childModeUnderMonths): 8 points,
  * animated animals that loom onto each point with gentle sounds, a small reward after each point.
- * Adult mode: 9 points with a plain dot.
+ * No separate check dots: every point trains the model, and accuracy is estimated by
+ * leave-one-point-out on the inner points.
+ * Adult mode: 9 points with a plain dot, then 4 separate check dots.
  *
  * Both modes collect only during fixations (gaze-contingent), re-attract automatically when the
  * child looks away, let the operator re-attract / skip / pause, retry skipped points once,
- * then validate on separate points and report error in px and approximate degrees.
- * "Improve weak spots" redoes only the points near the worst validation errors.
- * Background and sources: docs/CALIBRATION_V2.md.
+ * and report error in px and approximate degrees. The mapping is the compact model
+ * (lib/research/gaze/regression.ts). "Improve weak spots" redoes only the weakest points.
+ * Background and sources: docs/CALIBRATION_V2.md (v3 section).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -20,7 +22,7 @@ import styles from "@/styles/shared.module.css";
 import rs from "@/styles/research.module.css";
 import { RESEARCH_CONFIG } from "@/lib/research/config";
 import { getGazeEngine } from "@/lib/research/gaze";
-import { fitGazeModel, median, predictGaze, type FeatureVector, type GazeModel } from "@/lib/research/gaze/regression";
+import { fitGazeModel, leaveOnePointOut, median, predictGaze, type FeatureVector, type GazeModel } from "@/lib/research/gaze/regression";
 import {
   chooseMode,
   gradeDeg,
@@ -62,7 +64,8 @@ export default function CalibrationClient() {
   const [childCode, setChildCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CalibrationRecord | null>(null);
-  const [pointErrors, setPointErrors] = useState<number[]>([]);
+  /** Calibration point indices to redo with "improve weak spots". */
+  const [weakPoints, setWeakPoints] = useState<number[]>([]);
   const [existing, setExisting] = useState<CalibrationRecord | null>(null);
   const [attempts, setAttempts] = useState(0);
   /** Training samples per calibration point index, kept so "improve weak spots" can replace a few. */
@@ -146,6 +149,18 @@ export default function CalibrationClient() {
     const model: GazeModel = fitGazeModel(train, RESEARCH_CONFIG.ridgeLambda);
 
     const errors: number[] = [];
+    let weak: number[] = [];
+    let required = Math.ceil(m.validation.length / 2);
+    if (m.validation.length === 0) {
+      // Leave-one-point-out on the inner points: no extra dots for the child.
+      const idx = [...m.looPoints];
+      const pts = [...trainRef.current.entries()].map(([i, features]) => ({ i, x: m.points[i][0] * window.innerWidth, y: m.points[i][1] * window.innerHeight, features }));
+      const loo = leaveOnePointOut(pts, RESEARCH_CONFIG.ridgeLambda, (k) => idx.includes(pts[k].i));
+      const heldOut = pts.filter((p) => idx.includes(p.i)).map((p) => p.i);
+      idx.forEach((i) => errors.push(heldOut.includes(i) ? loo[heldOut.indexOf(i)] : Infinity));
+      weak = worstIndices(errors, 2).map((k) => idx[k]);
+      required = Math.ceil(idx.length / 2);
+    }
     for (let k = 0; k < m.validation.length; k++) {
       const [fx, fy] = m.validation[k];
       const r = await runPoint(fx, fy, 10 + k, mode, m.validationSamples, `ตรวจความแม่นยำ / Checking accuracy · ${k + 1} / ${m.validation.length}`);
@@ -157,8 +172,11 @@ export default function CalibrationClient() {
       const preds = r.features.map((f) => predictGaze(model, f));
       errors.push(Math.hypot(median(preds.map((p) => p.x)) - r.x, median(preds.map((p) => p.y)) - r.y));
     }
+    if (m.validation.length > 0) {
+      weak = worstIndices(errors, 2).map((vi) => nearestPoint(m.points, m.validation[vi][0], m.validation[vi][1]));
+    }
     const finite = errors.filter(Number.isFinite);
-    const meanErrorPx = finite.length >= Math.ceil(m.validation.length / 2) ? finite.reduce((a, b) => a + b, 0) / finite.length : Infinity;
+    const meanErrorPx = finite.length >= required ? finite.reduce((a, b) => a + b, 0) / finite.length : Infinity;
     const meanErrorDeg = pxToDeg(meanErrorPx, RESEARCH_CONFIG.viewingDistanceCm);
     const nextAttempts = attempts + 1;
     setAttempts(nextAttempts);
@@ -170,13 +188,14 @@ export default function CalibrationClient() {
       grade: gradeDeg(meanErrorDeg),
       mode,
       pointsUsed: trainRef.current.size,
+      accuracyMethod: m.validation.length ? "validation" : "leave_one_out",
       ok: meanErrorDeg <= RESEARCH_CONFIG.maxCalibrationErrorDeg,
       lowAccuracy: false,
       attempts: nextAttempts,
       createdAt: new Date().toISOString(),
     };
     saveCalibration(rec);
-    setPointErrors(errors);
+    setWeakPoints([...new Set(weak)]);
     return rec;
   }, [mode, runPoint, isCancelled, attempts]);
 
@@ -220,9 +239,7 @@ export default function CalibrationClient() {
   /** Redo only the calibration points closest to the worst validation points, then re-validate. */
   const improve = useCallback(async () => {
     if (!(await prepare())) return;
-    const m = RESEARCH_CONFIG.modes[mode];
-    const worst = worstIndices(pointErrors, 2).map((vi) => nearestPoint(m.points, m.validation[vi][0], m.validation[vi][1]));
-    const redo = [...new Set(worst)];
+    const redo = weakPoints;
     setPhase("running");
     try {
       await collectTraining(redo);
@@ -231,7 +248,25 @@ export default function CalibrationClient() {
     } catch (err) {
       fail(err);
     }
-  }, [prepare, mode, pointErrors, collectTraining, fitAndValidate, finish, fail, isCancelled]);
+  }, [prepare, weakPoints, collectTraining, fitAndValidate, finish, fail, isCancelled]);
+
+  /** Raw calibration numbers (no images, no child code) so accuracy can be tuned with real data. */
+  const downloadData = useCallback(() => {
+    const m = RESEARCH_CONFIG.modes[mode];
+    const data = {
+      version: 3,
+      mode,
+      viewport: { w: window.innerWidth, h: window.innerHeight },
+      result: result && { meanErrorPx: result.meanErrorPx, meanErrorDeg: result.meanErrorDeg, grade: result.grade, accuracyMethod: result.accuracyMethod },
+      points: [...trainRef.current.entries()].map(([i, features]) => ({ index: i, target: m.points[i], features })),
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `calibration-${mode}-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }, [mode, result]);
 
   const continueLowAccuracy = useCallback(() => {
     if (!result) return;
@@ -325,6 +360,10 @@ export default function CalibrationClient() {
             <span style={{ color: "var(--muted)", fontSize: 13 }}>
               ผ่านเมื่อ ≤ {RESEARCH_CONFIG.maxCalibrationErrorDeg}° (ค่าประมาณ รอปรับจากข้อมูลนำร่อง) · pass ≤{" "}
               {RESEARCH_CONFIG.maxCalibrationErrorDeg}° (approximate; TBD from pilot data) · {result.pointsUsed}/{m.points.length} points
+              {" · "}
+              <button type="button" className={rs.linkButton} onClick={downloadData}>
+                ดาวน์โหลดข้อมูลปรับเทียบ / Download calibration data
+              </button>
             </span>
           </p>
           <div className={styles.saveRow} style={{ justifyContent: "center" }}>
@@ -333,7 +372,7 @@ export default function CalibrationClient() {
                 เริ่มแบบทดสอบที่ 1 / Start Test 1 →
               </button>
             )}
-            {result.grade !== "high" && canRecalibrate && pointErrors.length > 0 && (
+            {result.grade !== "high" && canRecalibrate && weakPoints.length > 0 && (
               <button className={result.ok ? styles.secondaryButton : styles.primaryButton} onClick={improve}>
                 ปรับเฉพาะจุดที่คลาดเคลื่อน / Improve weak spots
               </button>
