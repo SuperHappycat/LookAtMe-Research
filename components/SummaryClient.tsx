@@ -36,6 +36,8 @@ export default function SummaryClient() {
   const [blind, setBlind] = useState(false);
   // Demo mode: show the presenter's chosen result; nothing is saved.
   const [demoScore, setDemoScore] = useState<number | null>(null);
+  /** Data too poor to interpret (from the save card's quality check): show "retest" instead of advice. */
+  const [retest, setRetest] = useState(false);
 
   useEffect(() => {
     // sessionStorage doesn't exist during this component's server render,
@@ -64,6 +66,8 @@ export default function SummaryClient() {
   );
   const tile = (real: number | undefined, demoValue: number) =>
     demo ? `${demoValue.toFixed(0)}%` : real === undefined ? "—" : `${real.toFixed(0)}%`;
+
+  const handleQuality = useCallback((q: { retestNeeded: boolean }) => setRetest(q.retestNeeded), []);
 
   const handleStartOver = useCallback(() => {
     if (demoScore !== null) {
@@ -150,9 +154,15 @@ export default function SummaryClient() {
             <div className={styles.overallScore}>
               คะแนนรวม / Overall Score: {result.overallScore.toFixed(0)} / 100
             </div>
-            <span className={styles.riskBadge} style={{ background: RISK_COLORS[result.riskLevel] }}>
-              {RISK_TH[result.riskLevel]} / {result.riskLevel} Risk
-            </span>
+            {retest ? (
+              <span className={styles.riskBadge} style={{ background: "var(--muted)" }}>
+                แปลผลไม่ได้ ต้องทดสอบซ้ำ / Not interpretable — retest
+              </span>
+            ) : (
+              <span className={styles.riskBadge} style={{ background: RISK_COLORS[result.riskLevel] }}>
+                {RISK_TH[result.riskLevel]} / {result.riskLevel} Risk
+              </span>
+            )}
           </div>
 
           <div className={styles.resultsGrid}>
@@ -170,7 +180,21 @@ export default function SummaryClient() {
             </div>
           </div>
 
-          <NextSteps risk={result.riskLevel} />
+          {retest ? (
+            <section className={report.retest}>
+              <h2>ควรทดสอบซ้ำ / Retest needed</h2>
+              <p>
+                ข้อมูลการมองครั้งนี้ไม่พอที่จะแปลผลได้ (เช่น กล้องเห็นใบหน้าไม่ชัด) กรุณาทดสอบใหม่ อย่าใช้คะแนนข้างบนแปลผล
+                <br />
+                <span className={report.en}>
+                  This session&apos;s gaze data were not good enough to interpret (for example, the face was often not
+                  visible). Please repeat the test; don&apos;t use the score above.
+                </span>
+              </p>
+            </section>
+          ) : (
+            <NextSteps risk={result.riskLevel} />
+          )}
 
           <div className={`${styles.saveRow} ${report.noPrint}`} style={{ justifyContent: "center" }}>
             <button className={styles.primaryButton} onClick={() => window.print()}>
@@ -186,7 +210,7 @@ export default function SummaryClient() {
         {demo ? (
           <p className={styles.subtitleCentered}>โหมดสาธิต: ไม่ได้บันทึกผล / Demo mode: nothing was saved.</p>
         ) : (
-          <ResearchSaveCard session={session} result={result} />
+          <ResearchSaveCard session={session} result={result} onQuality={handleQuality} />
         )}
         <div className={styles.saveRow} style={{ justifyContent: "center" }}>
           <button className={styles.secondaryButton} onClick={handleStartOver}>

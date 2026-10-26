@@ -36,9 +36,12 @@ const deviceOffline = () => typeof navigator !== "undefined" && navigator.onLine
 export default function ResearchSaveCard({
   session,
   result,
+  onQuality,
 }: {
   session: ScreeningSession;
   result: { overallScore: number; riskLevel: RiskLevel };
+  /** Lets the summary replace the next-steps advice when the data were too poor to score. */
+  onQuality?: (q: QualityResult) => void;
 }) {
   const router = useRouter();
   const [ctx] = useState<ResearchContext | null>(() => getResearchContext());
@@ -75,6 +78,7 @@ export default function ResearchSaveCard({
         maxEndCheckDeg: RESEARCH_CONFIG.maxEndCheckErrorDeg,
       });
       setQuality(q);
+      onQuality?.(q);
 
       const offline = !!ctx.offline || !ctx.sessionId || deviceOffline();
       // Offline the server id isn't known yet: the CSV carries the clientSessionId, swapped at sync.
@@ -153,7 +157,7 @@ export default function ResearchSaveCard({
       setError(friendlyError(err));
       setState("error");
     }
-  }, [ctx, ready, result, session, endCheck]);
+  }, [ctx, ready, result, session, endCheck, onQuality]);
 
   // While queued, notice when the queue has uploaded this screening.
   useEffect(() => {
