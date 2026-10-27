@@ -25,6 +25,8 @@ export interface ExportSession {
   retest_needed: boolean;
   calibration_error_px: number | null;
   low_accuracy: boolean;
+  /** Blind sessions are visible to org admins only (RLS). Not part of the plain sessions CSV. */
+  blind?: boolean;
   child: { code: string; birth_month: string | null; sex: string | null } | null;
 }
 
@@ -95,7 +97,15 @@ export function gazeExportCsv(parts: { session: ExportSession; gazeCsv: string }
 }
 
 export function downloadText(filename: string, text: string, type = "text/csv;charset=utf-8") {
-  const url = URL.createObjectURL(new Blob([text], { type }));
+  downloadBlob(filename, new Blob([text], { type }));
+}
+
+export function downloadBytes(filename: string, bytes: Uint8Array, type = "application/zip") {
+  downloadBlob(filename, new Blob([bytes as Uint8Array<ArrayBuffer>], { type }));
+}
+
+function downloadBlob(filename: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;

@@ -7,7 +7,7 @@
  */
 
 import { computeOverallScore, type RiskLevel, type SubScores } from "../scoring";
-import { beginResearchScreening } from "./screening";
+import { beginResearchScreening, type Assent } from "./screening";
 
 export type DemoPreset = "Low" | "Moderate" | "High";
 
@@ -31,7 +31,7 @@ export function demoResult(overall: number): { sub: SubScores; overallScore: num
 }
 
 /** Starts a demo screening for the active organization. No server call. */
-export function startDemoScreening(a: { orgId: string; engine: string; ageMonths: number; score: number }): void {
+export function startDemoScreening(a: { orgId: string; engine: string; ageMonths: number; score: number; assent?: Assent }): void {
   beginResearchScreening(
     {
       orgId: a.orgId,
@@ -45,6 +45,7 @@ export function startDemoScreening(a: { orgId: string; engine: string; ageMonths
       allowRecording: false,
       blind: false,
       demo: { score: Math.max(0, Math.min(100, Math.round(a.score))) },
+      ...(a.assent ? { assent: a.assent } : {}),
     },
     null,
   );

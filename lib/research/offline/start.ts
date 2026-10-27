@@ -15,7 +15,7 @@
  */
 
 import { getSupabase } from "../supabase/client";
-import { beginResearchScreening } from "../screening";
+import { beginResearchScreening, type Assent } from "../screening";
 import { counts, queueStore } from "../queue";
 import { CHILD_META_PREFIX } from "./queueCore";
 import { isNetworkError, offlineStartCheck, planFromOrg, type CachedChild, type CachedPlan } from "./rules";
@@ -26,6 +26,8 @@ export interface StartScreeningArgs {
   engine: string;
   allowRecording: boolean;
   blind: boolean;
+  /** Child assent (AssentDialog), saved with the session. */
+  assent?: Assent;
 }
 
 export interface StartScreeningResult {
@@ -122,6 +124,7 @@ function begin(
       allowRecording,
       blind: a.blind,
       offline,
+      ...(a.assent ? { assent: a.assent } : {}),
     },
     a.child.birth_month,
   );

@@ -89,6 +89,8 @@ async function mock(route) {
   await page.waitForSelector('text=มารดา / Mother');
   await step('02-child-consented');
   await page.click('text=เริ่มคัดกรอง / Start screening');
+  await step('02b-assent');
+  await page.click('text=✓ ตกลง / I agree');
   await page.waitForURL(/\/r\/check/);
   await page.click('text=เริ่มตรวจ / Start check');
   await page.waitForSelector('text=Lighting', { timeout: 20000 });
@@ -114,8 +116,13 @@ async function mock(route) {
   console.log('rpc calls:', state.rpc.map((r) => r.name).join(','));
   if (complete) {
     const d = complete.body.p_data;
-    console.log('complete_session:', JSON.stringify({ path: complete.body.p_gaze_path, overall: d.overall_score, risk: d.risk_level, l1: d.level1_score, q: d.quality_score, face: d.face_found_pct, retest: d.retest_needed, samples: d.results.samples, reasons: d.quality.reasons }));
+    console.log('complete_session:', JSON.stringify({ path: complete.body.p_gaze_path, overall: d.overall_score, risk: d.risk_level, l1: d.level1_score, q: d.quality_score, face: d.face_found_pct, retest: d.retest_needed, samples: d.results.samples, reasons: d.quality.reasons, assent: d.results.assent }));
   }
+  await step('05b-summary-final');
+  await page.emulateMedia({ media: 'print' });
+  await page.pdf({ path: `${out}/report.pdf`, format: 'A4', printBackground: true });
+  await step('06-summary-print');
+  await page.emulateMedia({ media: 'screen' });
   console.log('errors:', errors.join('\n') || 'none');
   await browser.close();
 })().catch((e) => { console.error('FAILED', e.message); process.exit(1); });

@@ -11,6 +11,12 @@
 import { startNewSession, clearSession } from "../sessionState";
 import { clearGazeLog } from "./gazeLog";
 
+/** Child assent (components/research/AssentDialog.tsx). parent_only = too young; parent consent only. */
+export interface Assent {
+  kind: "child" | "parent_only";
+  at: string;
+}
+
 export interface ResearchContext {
   orgId: string;
   childId: string;
@@ -29,6 +35,8 @@ export interface ResearchContext {
   offline?: boolean;
   /** Demo mode (lib/research/demo.ts): the summary shows this overall score and nothing is saved. */
   demo?: { score: number };
+  /** Child assent given before the start. */
+  assent?: Assent;
   cameraCheck?: {
     faceFoundPct: number | null;
     meanLuma: number | null;

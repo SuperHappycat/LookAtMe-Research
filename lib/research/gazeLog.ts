@@ -32,6 +32,8 @@ export interface LevelMeta {
   viewport: { w: number; h: number };
   /** Union of the stimulus video boxes (viewport px) when the level ran; x_norm/y_norm are relative to it. */
   stimulusBox: { left: number; top: number; width: number; height: number } | null;
+  /** Pause-when-looking-away (lib/research/lookAway.ts): how often and how long the stimulus was paused. */
+  pauses?: { count: number; totalMs: number };
 }
 
 interface LogState {
@@ -84,6 +86,11 @@ export function startLevel(meta: LevelMeta) {
 export function setLevelStimulusBox(level: number, box: LevelMeta["stimulusBox"]) {
   const meta = state.levels.find((l) => l.level === level);
   if (meta && box && box.width > 0 && box.height > 0) meta.stimulusBox = box;
+}
+
+export function setLevelPauses(level: number, pauses: { count: number; totalMs: number }) {
+  const meta = state.levels.find((l) => l.level === level);
+  if (meta) meta.pauses = pauses;
 }
 
 export function getLevelMeta(level: number): LevelMeta | undefined {

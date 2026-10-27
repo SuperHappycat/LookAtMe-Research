@@ -8,7 +8,7 @@
  * lib/research/screening.ts), so the original test flow is unaffected.
  */
 
-import { addLuma, addRow, persistGazeLog, setLevelStimulusBox, startLevel } from "./gazeLog";
+import { addLuma, addRow, persistGazeLog, setLevelStimulusBox, startLevel, setLevelPauses } from "./gazeLog";
 import { getResearchContext } from "./screening";
 import { startRecording, type RecordingHandle } from "./recording";
 import { handleFinishedRecording } from "./recordingUploader";
@@ -112,6 +112,11 @@ export const researchLogger = {
       confidence: s.confidence,
       face_scale: s.faceScale ?? null,
     });
+  },
+
+  /** Records pause-when-looking-away totals for the running level (call before stop()). */
+  pauses(count: number, totalMs: number) {
+    if (active) setLevelPauses(level, { count, totalMs: Math.round(totalMs) });
   },
 
   stop() {
